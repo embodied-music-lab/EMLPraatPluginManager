@@ -63,3 +63,28 @@ hardware). macOS rendering of the dialogs (logic is proven; a
 short interactive sanity pass on a Mac remains worthwhile before
 public release). The manager's future networked features do not
 exist yet and are therefore untested.
+
+## End-to-end with real-world plugins (same day, later)
+
+Six genuine, unmodified plugins acquired from their public
+repositories (cpran: utils, tgutils, selection, twopass; jjatria:
+jjatools; AERodgers: AERoPlot) and packaged into five archives of
+deliberately varied shape: plugin at archive root (zip and tar.gz),
+GitHub Download-ZIP style (`plugin_tgutils-master/`), nested one
+level down (`release/plugin_selection/`), and one zip holding two
+plugins side by side. All five installed through the real GUI
+dialogs; the two-plugin archive showed both rows ("jjatools, adds
+36 commands"; "twopass, adds 1 command") and installed both in one
+pass; the nested layout resolved correctly. An independent verifier
+re-diffed every installed folder against its source archive:
+byte-identical, no staging leftovers, zero discrepancies. Finale:
+bare Praat launched with all six accumulated plugins — clean
+startup, no error dialogs, meaning every real setup.praat executed.
+Evidence pngs in `evidence/`.
+
+Real-world finding for the roadmap: a GitHub-style archive installs
+under its literal folder name (`plugin_tgutils-master`), which
+works but leaves a noncanonical name in the preferences folder.
+Whether the installer should offer to strip `-master`/`-main`
+style suffixes is an open design question, deliberately not
+decided in code.

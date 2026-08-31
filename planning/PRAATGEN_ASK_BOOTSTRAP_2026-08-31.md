@@ -113,7 +113,7 @@ Top to bottom:
 ## Payload for this draft (placeholder — will be replaced by a
 generator later; build the pattern, not the product)
 
-Three files:
+Four files (setup.praat, about.praat, VERSION, README.txt -- setup.praat is registration only; the About command runs its own script file):
 
 1. `setup.praat` — registers one menu command under Praat's
    Objects-window menu: "EML Plugin Manager: About", which prints
@@ -128,7 +128,7 @@ Three files:
 ## Acceptance (the generated script is done when)
 
 - On a machine at or above the floor with no prior install: one run
-  creates the folder with exactly the three files, verify passes,
+  creates the folder with exactly the four manifest files, verify passes,
   and after a Praat restart the About command appears and prints
   the three lines.
 - A second run stops at the already-installed message and writes

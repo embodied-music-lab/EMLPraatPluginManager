@@ -71,6 +71,20 @@ match of `plugin_` followed by name characters (letters, digits,
 proposal and the literal. References to OTHER plugin names are
 IGNORED (they are dependencies, not identity).
 
+RESOLUTION DISCRIMINATOR (a match equal to proposal or literal is
+still not automatically identity — a full-path reference to a
+DIFFERENT plugin can coincidentally carry the same name, e.g. a
+fork of `plugin_utils` arriving as `plugin_utils-master` while
+depending on the real `plugin_utils`): extract the SUBPATH that
+follows the match — the characters after it up to the first double
+quote, whitespace, or end of line, with any leading `/` removed. A
+match COUNTS as evidence only when (a) the subpath is empty (a
+bare root reference), or (b) a file or folder at that subpath
+exists INSIDE the folder under evaluation. A match whose subpath
+does not resolve inside this folder is an EXTERNAL reference to a
+same-named plugin elsewhere and is ignored — it neither confirms
+nor cancels.
+
 - A match equal to the PROPOSAL: the proposal is CONFIRMED.
   Annotation adds: "name confirmed by the plugin's own scripts".
 - A match equal to the LITERAL (when literal differs from
@@ -125,7 +139,10 @@ the existing archive note.
 
 ## 9. NORMATIVE TABLE — ships as `harness/canonical_names.tsv`,
 tab-separated, exactly these columns:
-literal, has_setup (0/1), content_ref (none|literal|proposal),
+literal, has_setup (0/1), content_ref
+(none|literal|proposal|literal_external|proposal_external — the
+_external forms mean the reference's subpath does NOT resolve
+inside the folder, per §5's discriminator),
 expected_proposal, expected_row (row|row_unchecked|dropped),
 note
 
@@ -145,7 +162,9 @@ note
     plugin_2	1	none	plugin_2	row	guard: suffix IS stem
     plugin_praat7-main	1	none	plugin_praat7	row	digit in stem survives
     plugin_X_v2	1	literal	plugin_X_v2	row	author-versioned, content cancels
+    plugin_X_v2	1	literal_external	plugin_X	row	same-named EXTERNAL ref, discarded, heuristic stands
     plugin_X_v2	1	none	plugin_X	row	no self-reference, heuristic stands
+    plugin_utils-master	1	proposal_external	plugin_utils	row	fork depending on real plugin_utils; external ref discarded, rename by heuristic only, no "confirmed" annotation
     plugin_utils	1	none	plugin_utils	row	clean name untouched
     owner-plugin_X-a1b2c3d	1	none	plugin_X	row_unchecked	near-miss, setup present, unconfirmed
     owner-plugin_X-a1b2c3d	1	proposal	plugin_X	row	near-miss, content-confirmed

@@ -618,40 +618,50 @@ else
 endif
 
 # --- 9c. the remove listing: a ghost is included, annotated with the ghost
-#     suffix; a real plugin is not so annotated. Sec. 2c (REVISED): the
-#     ghost suffix (40 chars) always exceeds emlManager_labelSuffixCap (16),
-#     so it is always shortened via its own marker regardless of the name's
-#     length -- the annotation is present (head "lef" and tail "plugin" of
-#     the shortened suffix both survive) but the whole word "leftover" no
-#     longer does; that is expected, not a regression (Check 10 asserts the
-#     cap/marker mechanics directly).
+#     suffix; a real plugin is not so annotated. Sec. 2a AMENDED: a lone row
+#     (no other row in the listing to collide with) stays BARE, so this
+#     drives emlManagerRemoveComputeSuffix (suffix + ghost detection) and
+#     caps the result with NO index prefix (emlManagerApplyLabelCap with
+#     .prefix$ = ""), exactly what emlManagerBuildLabels does for an
+#     uncollided row. Sec. 2c: the ghost suffix (40 chars) always exceeds
+#     emlManager_labelSuffixCap (16), so it is always shortened via its own
+#     marker regardless of the name's length -- the annotation is present
+#     (head "lef" and tail "plugin" of the shortened suffix both survive)
+#     but the whole word "leftover" no longer does; that is expected, not a
+#     regression (Check 10 asserts the cap/marker mechanics directly).
 
 check9GhostShort$ = check9Prefs$ + "/plugin_X"
 createFolder: check9GhostShort$
 writeFileLine: check9GhostShort$ + "/.DS_Store", "macOS junk Praat cannot enumerate"
 
-@emlManagerRemoveBuildLabel: "plugin_X", 0, check9Prefs$, emlManager_boolLabelCap, 1
-if emlManagerRemoveBuildLabel.isGhost = 1
-    ... and index (emlManagerRemoveBuildLabel.label$, "lef") > 0
-    ... and endsWith (emlManagerRemoveBuildLabel.label$, "plugin")
+@emlManagerRemoveComputeSuffix: "plugin_X", 0, check9Prefs$
+@emlManagerApplyLabelCap: "", "plugin_X", emlManagerRemoveComputeSuffix.suffix$, emlManager_boolLabelCap
+@emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+check9GhostLabel$ = emlManagerDeriveLabel.label$
+if emlManagerRemoveComputeSuffix.isGhost = 1
+    ... and index (check9GhostLabel$, "lef") > 0
+    ... and endsWith (check9GhostLabel$, "plugin")
     pass = pass + 1
     appendInfoLine: "PASS: the remove listing marks the ghost with its suffix ('",
-        ... emlManagerRemoveBuildLabel.label$, "')"
+        ... check9GhostLabel$, "')"
 else
     fail = fail + 1
     appendInfoLine: "FAIL: the remove listing did not mark the ghost -- label$='",
-        ... emlManagerRemoveBuildLabel.label$, "'"
+        ... check9GhostLabel$, "'"
 endif
 
-@emlManagerRemoveBuildLabel: "plugin_Real", 0, check9Prefs$, emlManager_boolLabelCap, 2
-if emlManagerRemoveBuildLabel.isGhost = 0
-    ... and index (emlManagerRemoveBuildLabel.label$, "leftover") = 0
+@emlManagerRemoveComputeSuffix: "plugin_Real", 0, check9Prefs$
+@emlManagerApplyLabelCap: "", "plugin_Real", emlManagerRemoveComputeSuffix.suffix$, emlManager_boolLabelCap
+@emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+check9RealLabel$ = emlManagerDeriveLabel.label$
+if emlManagerRemoveComputeSuffix.isGhost = 0
+    ... and index (check9RealLabel$, "leftover") = 0
     pass = pass + 1
     appendInfoLine: "PASS: the remove listing does not mark a real plugin as a ghost"
 else
     fail = fail + 1
     appendInfoLine: "FAIL: a real plugin was marked as a ghost -- label$='",
-        ... emlManagerRemoveBuildLabel.label$, "'"
+        ... check9RealLabel$, "'"
 endif
 
 # --- 9d. the install-loop mechanism for placing over a ghost: clear the
@@ -745,12 +755,17 @@ else
 endif
 
 # ============================================================================
-# UX round 2026-09-01 REVISED, sec. 2e: Check 10 -- the selection-row label
-# builder (emlManagerIndexPrefix + emlManagerApplyLabelCap), table-driven
-# against expected strings computed by the documented algorithm (sec. 2c:
-# cap = emlManager_boolLabelCap = 38, marker = emlManager_labelMarker$ =
-# "___", suffix shortened tail-preserving to at most
-# emlManager_labelSuffixCap = 16 chars before the name gets what's left).
+# UX round 2026-09-01 AMENDED, sec. 2e: Check 10 -- the selection-row label
+# builder. 10a-10l table-drive the low-level cap/suffix/marker mechanics
+# (emlManagerIndexPrefix + emlManagerApplyLabelCap + emlManagerDeriveLabel)
+# directly against expected strings computed by the documented algorithm
+# (sec. 2c: cap = emlManager_boolLabelCap = 38, marker =
+# emlManager_labelMarker$ = "___", suffix shortened tail-preserving to at
+# most emlManager_labelSuffixCap = 16 chars before the name gets what's
+# left) -- unaffected by the 2a amendment, since the amendment only changes
+# WHETHER those mechanics run with an index prefix, never how they behave
+# once invoked. 10m/10n then drive the higher-level canon
+# (emlManagerBuildLabels) that makes that bare-vs-prefixed decision.
 # ============================================================================
 
 appendInfoLine: ""
@@ -998,6 +1013,103 @@ if startsWith (sanitizedDerived$, emlManager_indexLabelLead$ + "7_")
 else
     fail = fail + 1
     appendInfoLine: "FAIL: sanitizer-survival -- derived$ = '", sanitizedDerived$, "'"
+endif
+
+# 10m. sec. 2a AMENDED / 2e: a listing of DISTINCT names yields NO prefixes
+# at all -- the realistic case. Five plainly different plugin names (no two
+# sharing a capped, sanitized label) run through the shared canon
+# emlManagerBuildLabels; every row must come back bare (no leading
+# "n<i>_ "), every label distinct, and (since bare labels equal their own
+# sanitized text) every derived readback variable distinct too.
+check10mN = 5
+check10mNames$# = { "plugin_Alpha", "plugin_Bravo", "plugin_Charlie",
+    ... "plugin_Delta", "plugin_Echo" }
+# emlManagerBuildLabels requires every .suffix$# element already WRITTEN
+# (see its own doc comment) -- a literal all-"" vector, not a raw
+# empty$# (n) whose elements were never assigned.
+check10mSuffix$# = { "", "", "", "", "" }
+@emlManagerBuildLabels: check10mNames$#, check10mSuffix$#, check10mN, emlManager_boolLabelCap
+
+check10mAllBare = 1
+check10mLabelsUnique = 1
+check10mDerivedUnique = 1
+for check10mI from 1 to check10mN
+    if emlManagerBuildLabels.prefixed# [check10mI] <> 0
+        check10mAllBare = 0
+    endif
+    if index_regex (emlManagerBuildLabels.label$# [check10mI], "^n[0-9]+_") > 0
+        check10mAllBare = 0
+    endif
+    for check10mJ from check10mI + 1 to check10mN
+        if emlManagerBuildLabels.label$# [check10mJ] = emlManagerBuildLabels.label$# [check10mI]
+            check10mLabelsUnique = 0
+        endif
+        if emlManagerBuildLabels.derived$# [check10mJ] = emlManagerBuildLabels.derived$# [check10mI]
+            check10mDerivedUnique = 0
+        endif
+    endfor
+endfor
+if check10mAllBare = 1 and check10mLabelsUnique = 1 and check10mDerivedUnique = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: a listing of distinct names yields zero index prefixes,",
+        ... " labels and readback variables both already unique -- e.g. '",
+        ... emlManagerBuildLabels.label$# [1], "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: distinct-name listing -- allBare=", check10mAllBare,
+        ... ", labelsUnique=", check10mLabelsUnique, ", derivedUnique=", check10mDerivedUnique
+endif
+
+# 10n. sec. 2a AMENDED / 2e: a FORCED post-cap collision -- two names built
+# so their BARE capped labels come out byte-identical (same first 21 chars,
+# the head emlManagerMiddleEllipsis keeps at cap=38/no-suffix/no-prefix, and
+# same last 14 chars, the tail it keeps -- only the middle, which the
+# ellipsis discards, differs) -- still yields prefixed, DISTINCT labels and
+# DISTINCT derived readback variables, and the cap invariant still holds
+# with the prefix added back in.
+@emlHarnessRepeatChar: "H", 14
+check10nHead$ = "plugin_" + emlHarnessRepeatChar.result$
+@emlHarnessRepeatChar: "T", 14
+check10nTail$ = emlHarnessRepeatChar.result$
+check10nName1$ = check10nHead$ + "MID1" + check10nTail$
+check10nName2$ = check10nHead$ + "MID2" + check10nTail$
+if length (check10nHead$) <> 21 or length (check10nTail$) <> 14
+    fail = fail + 1
+    appendInfoLine: "FAIL: 10n fixture malformed -- head len=", length (check10nHead$),
+        ... " tail len=", length (check10nTail$)
+else
+    check10nN = 2
+    check10nNames$# = { check10nName1$, check10nName2$ }
+    check10nSuffix$# = { "", "" }
+
+    # Control: the bare capped labels really do collide before the canon
+    # intervenes (otherwise this fixture is not testing what it claims to).
+    @emlManagerApplyLabelCap: "", check10nName1$, "", emlManager_boolLabelCap
+    check10nBare1$ = emlManagerApplyLabelCap.capped$
+    @emlManagerApplyLabelCap: "", check10nName2$, "", emlManager_boolLabelCap
+    check10nBare2$ = emlManagerApplyLabelCap.capped$
+
+    @emlManagerBuildLabels: check10nNames$#, check10nSuffix$#, check10nN, emlManager_boolLabelCap
+
+    if check10nBare1$ = check10nBare2$
+        ... and emlManagerBuildLabels.prefixed# [1] = 1 and emlManagerBuildLabels.prefixed# [2] = 1
+        ... and emlManagerBuildLabels.label$# [1] <> emlManagerBuildLabels.label$# [2]
+        ... and emlManagerBuildLabels.derived$# [1] <> emlManagerBuildLabels.derived$# [2]
+        ... and length (emlManagerBuildLabels.label$# [1]) <= emlManager_boolLabelCap
+        ... and length (emlManagerBuildLabels.label$# [2]) <= emlManager_boolLabelCap
+        pass = pass + 1
+        appendInfoLine: "PASS: a forced post-cap collision (bare labels both '", check10nBare1$,
+            ... "') is cured by the index prefix -- '", emlManagerBuildLabels.label$# [1],
+            ... "' vs '", emlManagerBuildLabels.label$# [2], "', readback '",
+            ... emlManagerBuildLabels.derived$# [1], "' vs '", emlManagerBuildLabels.derived$# [2], "'"
+    else
+        fail = fail + 1
+        appendInfoLine: "FAIL: forced post-cap collision -- bare1='", check10nBare1$,
+            ... "' bare2='", check10nBare2$, "' prefixed=[",
+            ... emlManagerBuildLabels.prefixed# [1], ",", emlManagerBuildLabels.prefixed# [2],
+            ... "] label1='", emlManagerBuildLabels.label$# [1], "' label2='",
+            ... emlManagerBuildLabels.label$# [2], "'"
+    endif
 endif
 
 # ============================================================================

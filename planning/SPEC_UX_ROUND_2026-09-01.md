@@ -46,16 +46,22 @@ annotation suffixes (measured), and displayed neither "..." nor
 parentheses because the sanitizer strips them (measured). All four
 are cured structurally:
 
-a. INDEX PREFIX = identity. Every selection-row label begins with
-   the item's index and an underscore: "12_ ". Digits and
-   underscore survive the sanitizer, so every label — and therefore
-   every derived readback variable — is unique BY CONSTRUCTION,
-   whatever the ellipsis does to the rest. The install dialog's
-   description comment above each checkbox begins with the same
-   index ("12. <full name> ..."), and the remove flow's Dialog 2
-   lists each selected plugin's FULL folder name prefixed by the
-   same index, so the user can always resolve a shortened checkbox
-   against its full name.
+a. AMENDED (Ian, 1 Sep: visible index prefixes on every row are a
+   waste of space): labels are BARE by default. The index prefix
+   ("n12_" — letter-initial, since a derived variable name must not
+   start with a digit, measured) is applied ONLY to rows whose
+   capped, sanitized labels would otherwise collide within the
+   dialog: after building all capped labels for the listing, any
+   group of duplicates gets the prefix; unique labels get none. In
+   realistic listings no prefixes appear at all. Uniqueness of the
+   derived readback variables remains guaranteed by construction —
+   bare labels are unique because they only stay bare when
+   distinct; collided labels are made unique by the prefix. The
+   install dialog's description comments and the remove flow's
+   Dialog 2 continue to carry FULL names (no index numbering
+   needed when no prefixes are shown; when a collision forced
+   prefixes, Dialog 2 lines carry the matching "n12." so the user
+   can resolve them). Applies to BOTH selection dialogs — one canon.
 b. ELLIPSIS MARKER = "___" (three underscores) — sanitizer-proof,
    exactly three characters.
 c. CAP INVARIANT: total label length (index prefix included) is
@@ -71,14 +77,13 @@ d. COLLISION GUARDS compare REAL identities, never labels: the
    proposed names; the remove flow needs no duplicate guard at all
    (folder names in one directory are unique; the index prefix
    makes variables unique regardless).
-e. Harness: table-driven checks on the REAL label builder — cap
-   never exceeded in any branch incl. the measured overflow case
-   (35 < len(name) < 38 with long suffix); suffix always present
-   when given; two long near-identical names yield labels distinct
-   even BEFORE the index (tails preserved) and variables distinct
-   BY the index; sanitizer-survival of prefix and marker asserted
-   by running the builder output through emlManagerDeriveLabel and
-   checking digits/underscores intact.
+e. Harness (amended with 2a): cap never exceeded in any branch
+   incl. the 35-37 overflow case; suffix always present when given;
+   a listing of DISTINCT names yields NO prefixes and unique
+   sanitized labels; a FORCED post-cap collision (two names whose
+   capped labels are identical) yields prefixed, distinct labels
+   and distinct derived variables; sanitizer-survival of the
+   prefix and marker asserted through emlManagerDeriveLabel.
 
 ## 3. Line-budget pagination (Ian's ruling: 12 items was too few)
 

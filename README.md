@@ -8,7 +8,7 @@ Author: Ian Howell, Embodied Music Lab.
 
 ## Status
 
-Version 0.6.1 (beta). Version 1.0.0 will be the first public
+Version 0.6.2 (beta). Version 1.0.0 will be the first public
 release. Install-from-disk, remove, and the install script are
 working and verified against the test harness in `harness/`,
 including installs and removals of real published plugins in every

@@ -8,13 +8,22 @@
 #          original, and only then are the original files and folders
 #          deleted. Nothing is removed unless the user explicitly confirms.
 # Date: 1 September 2026
-# Version: 1.1
+# Version: 1.2
+#
+# 1.2 -- AMENDED selection-label subsystem (sec. 2a of the UX round spec,
+#       Ian's 1 Sep amendment): Dialog 1's checkbox labels are bare by
+#       default; emlManagerRemoveComputeSuffix now only computes each row's
+#       annotation suffix (manager / ghost), and the whole listing's labels
+#       are built in one pass through the shared emlManagerBuildLabels canon
+#       (install-from-disk.praat), which prefixes only the rows whose bare
+#       labels collide. Dialog 2's full-name lines carry the matching
+#       "n<index>." breadcrumb only for a row that was actually prefixed.
 #
 # 1.1 -- REVISED selection-label subsystem (sec. 2 of the UX round spec):
-#       emlManagerRemoveBuildLabel now takes each row's Dialog-1 listing
-#       index and prefixes the checkbox label with it (identity, sec. 2a);
-#       Dialog 2's full-name lines carry the same index so a shortened
-#       checkbox can always be resolved against its full folder name.
+#       emlManagerRemoveBuildLabel took each row's Dialog-1 listing index and
+#       prefixed the checkbox label with it (identity, sec. 2a) unconditionally;
+#       Dialog 2's full-name lines carried the same index so a shortened
+#       checkbox could always be resolved against its full folder name.
 #
 # ATTRIBUTION
 # Framework: EML PraatGen by Ian Howell
@@ -291,15 +300,15 @@ procedure emlManagerRemoveExecutePlugin: .folderName$, .destName$, .destPath$,
 endproc
 
 # ----------------------------------------------------------------------------
-# Items 1+2 (sec. 2 REVISED): Dialog-1 label for one plugin_* folder, at
-# listing position .index. Appends the manager suffix when .isOwnFolder = 1,
-# and (via the installed-test canon) the ghost suffix when the folder exists
-# but is not installed, then caps the combined label to .cap characters --
-# index prefix included -- before deriving the readback variable name. The
-# index prefix makes .derived$ unique by construction (sec. 2a); folder names
-# in one prefs directory are unique on their own too, so this needs no
-# duplicate guard (sec. 2d).
-procedure emlManagerRemoveBuildLabel: .folderName$, .isOwnFolder, .prefsDir$, .cap, .index
+# Items 1+2: the Dialog-1 annotation suffix for one plugin_* folder --
+# appends the manager suffix when .isOwnFolder = 1, and (via the
+# installed-test canon) the ghost suffix when the folder exists but is not
+# installed. Pure suffix computation, no capping and no index prefix: the
+# main sequence's Dialog-1 build collects every row's (.folderName$,
+# .suffix$) pair first and hands the whole listing to emlManagerBuildLabels
+# (sec. 2a AMENDED) in one pass, since whether a prefix is needed at all can
+# only be decided once every row's bare label is known.
+procedure emlManagerRemoveComputeSuffix: .folderName$, .isOwnFolder, .prefsDir$
     .suffix$ = ""
     if .isOwnFolder = 1
         .suffix$ = .suffix$ + emlManagerRemove_managerSuffix$
@@ -310,11 +319,6 @@ procedure emlManagerRemoveBuildLabel: .folderName$, .isOwnFolder, .prefsDir$, .c
         .isGhost = 1
         .suffix$ = .suffix$ + emlManagerRemove_ghostSuffix$
     endif
-    @emlManagerIndexPrefix: .index
-    @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, .folderName$, .suffix$, .cap
-    @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
-    .label$ = emlManagerDeriveLabel.label$
-    .derived$ = emlManagerDeriveLabel.derived$
 endproc
 
 # ----------------------------------------------------------------------------
@@ -387,20 +391,30 @@ if not variableExists ("emlManagerRemove_harnessMode")
     allNames$# = sort$# (allNames$#)
     nAll = size (allNames$#)
 
-    boolLabels$# = empty$# (max (nAll, 1))
-    derivedNames$# = empty$# (max (nAll, 1))
+    suffix$# = empty$# (max (nAll, 1))
     itemLines# = zero# (max (nAll, 1))
     for iName from 1 to nAll
         isOwnFolder = 0
         if allNames$# [iName] = ownFolderName$
             isOwnFolder = 1
         endif
-        @emlManagerRemoveBuildLabel: allNames$# [iName], isOwnFolder, prefsDir$,
-            ... emlManager_boolLabelCap, iName
-        boolLabels$# [iName] = emlManagerRemoveBuildLabel.label$
-        derivedNames$# [iName] = emlManagerRemoveBuildLabel.derived$
+        @emlManagerRemoveComputeSuffix: allNames$# [iName], isOwnFolder, prefsDir$
+        suffix$# [iName] = emlManagerRemoveComputeSuffix.suffix$
         itemLines# [iName] = 1
     endfor
+
+    # Sec. 2a AMENDED: one canon pass over the whole listing builds every
+    # checkbox label -- bare by default, prefixed only for a row whose bare,
+    # capped, sanitized label collides with another's (emlManagerBuildLabels;
+    # shared with the install dialog's checklist, "one canon" per sec. 2a).
+    # rowPrefixed# is kept for Dialog 2 below, which needs to know -- per
+    # SELECTED row -- whether its checkbox carried the index prefix, so its
+    # full-name line can carry the matching breadcrumb only when one is
+    # actually needed to resolve a shortened, prefixed checkbox.
+    @emlManagerBuildLabels: allNames$#, suffix$#, nAll, emlManager_boolLabelCap
+    boolLabels$# = emlManagerBuildLabels.label$#
+    derivedNames$# = emlManagerBuildLabels.derived$#
+    rowPrefixed# = emlManagerBuildLabels.prefixed#
 
     # Item 3: line-budget pagination -- each row here is a single boolean
     # with no description comment, so this is a plain checkbox list; the
@@ -490,10 +504,16 @@ if not variableExists ("emlManagerRemove_harnessMode")
     while gateOn = 0
         beginPause: emlManagerRemove_title2$
             for iShow2 from 1 to nSel
-                # Sec. 2a: FULL folder name, prefixed with the same index
-                # its (possibly shortened) Dialog-1 checkbox label used.
-                @emlManagerIndexDescPrefix: selectedIndex# [iShow2]
-                @emlManagerRemoveEmitWrapped: emlManagerIndexDescPrefix.prefix$
+                # Sec. 2a AMENDED: FULL folder name, carrying the matching
+                # "n<index>." breadcrumb only when Dialog 1's checkbox for
+                # this row was itself prefixed (a collision forced it) --
+                # a bare checkbox's full name needs no breadcrumb.
+                gateDescPrefix$ = ""
+                if rowPrefixed# [selectedIndex# [iShow2]] = 1
+                    @emlManagerIndexDescPrefix: selectedIndex# [iShow2]
+                    gateDescPrefix$ = emlManagerIndexDescPrefix.prefix$
+                endif
+                @emlManagerRemoveEmitWrapped: gateDescPrefix$
                     ... + selectedNames$# [iShow2]
                 @emlManagerRemovePluralWord: fileCount# [iShow2],
                     ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$

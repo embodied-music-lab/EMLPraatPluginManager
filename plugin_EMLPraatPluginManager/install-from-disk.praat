@@ -9,12 +9,24 @@
 #          lets the user select which to install and whether to keep literal
 #          names, archives any existing same-named plugin, and places the new one.
 # Date: 1 September 2026
-# Version: 5.1
+# Version: 5.2
+#
+# 5.2 -- AMENDED selection-label subsystem (sec. 2a of the UX round spec,
+#       Ian's 1 Sep amendment: visible index prefixes on every row are a
+#       waste of space). Labels are BARE by default -- emlManagerBuildLabels
+#       caps and sanitizes every row's label first with no prefix, then
+#       rebuilds only the rows whose bare labels collide, prefixing each
+#       member of a colliding group with its listing-index (letter-initial,
+#       unchanged from 5.1). One canon procedure now serves both selection
+#       dialogs (install's checklist and remove's Dialog 1). The description
+#       comment / Dialog-2 line carries the matching "n<i>." breadcrumb only
+#       for a row a collision actually prefixed; a bare row's full name
+#       needs no breadcrumb.
 #
 # 5.1 -- REVISED selection-label subsystem (sec. 2 of the UX round spec,
-#       after the failed v0.6.1 drive): every selection-row label now begins
-#       with an index prefix that is identity, never touched by shortening,
-#       so the derived readback variable is unique by construction; the cap
+#       after the failed v0.6.1 drive): every selection-row label began
+#       with an index prefix that was identity, never touched by shortening,
+#       so the derived readback variable was unique by construction; the cap
 #       (emlManager_boolLabelCap) is a hard invariant enforced by the
 #       shortening helper itself, not by callers passing sane budgets; a
 #       suffix is shortened, never dropped; the shortening marker is "___"
@@ -62,13 +74,16 @@ emlManager_boolLabelCap = 38
 # never actually showed up in a checkbox -- digits and "_" survive, so three
 # underscores do.
 emlManager_labelMarker$ = "___"
-# Sec. 2a: every selection-row checkbox label begins with an index prefix
-# (digits and "_" survive the sanitizer, making the label -- and its
-# derived readback variable -- unique by construction regardless of what
-# the cap does to the rest). Every description comment / Dialog-2 full-name
-# line begins with the same index as "<index>. " instead (plain display
-# text, not passed through the sanitizer, so the more readable punctuation
-# is fine there).
+# Sec. 2a AMENDED: a selection-row checkbox label begins with an index
+# prefix ONLY when its bare, capped, sanitized label collides with another
+# row's (emlManagerBuildLabels) -- digits and "_" survive the sanitizer,
+# making a prefixed label -- and its derived readback variable -- unique by
+# construction regardless of what the cap did to the rest. A row whose
+# label stayed bare gets no prefix on its description comment / Dialog-2
+# line either; a row a collision prefixed gets the same index there too, as
+# "n<index>. " (emlManagerIndexDescPrefix; plain display text, not passed
+# through the sanitizer, so the more readable trailing period is fine
+# there).
 # LEADING LETTER (measured, GUI drive): a Praat script variable name must
 # start with a letter, and a pause-form boolean's real internal name is
 # Praat's OWN derivation of its label text -- not something this plugin can
@@ -592,25 +607,100 @@ procedure emlManagerApplyLabelCap: .prefix$, .name$, .suffix$, .cap
 endproc
 
 # ----------------------------------------------------------------------------
-# Sec. 2a: the identity prefix for selection-row .index (1-based, its
+# Sec. 2a AMENDED: the identity prefix for selection-row .index (1-based, its
 # position in the page-1 listing) -- a fixed leading letter
 # (emlManager_indexLabelLead$; see its comment for why), then the index
 # digits and "_", all of which survive emlManagerDeriveLabel's sanitizer
-# untouched, so the derived readback variable is both a valid Praat
-# identifier and unique by construction no matter what the cap does to the
-# rest of the label.
+# untouched. Used ONLY by emlManagerBuildLabels below, and only for the rows
+# a collision actually forces it onto -- see that procedure for the bare-by-
+# default rule. Wherever it IS used, the derived readback variable is both a
+# valid Praat identifier and unique by construction no matter what the cap
+# does to the rest of the label.
 procedure emlManagerIndexPrefix: .index
     .prefix$ = emlManager_indexLabelLead$ + string$ (.index) + emlManager_indexLabelSep$
 endproc
 
 # ----------------------------------------------------------------------------
-# Sec. 2a: the plain-text index prefix used on description comments and the
-# remove flow's Dialog-2 full-name lines -- "<index>. " -- so a shortened
-# checkbox label can always be resolved against its full name by index. Not
-# passed through the sanitizer, so it can use punctuation the checkbox
-# prefix cannot.
+# Sec. 2a AMENDED: the plain-text index prefix used on description comments
+# and the remove flow's Dialog-2 full-name lines when (and only when) that
+# row's checkbox label was itself forced to carry the identity prefix --
+# "n<index>. ", the same letter and digits as the checkbox, so a shortened,
+# prefixed checkbox label can be resolved against its full name. A row whose
+# checkbox stayed bare gets no prefix here either (see emlManagerBuildLabels
+# and its .prefixed# output). Not passed through the sanitizer, so it can
+# use punctuation the checkbox prefix cannot.
 procedure emlManagerIndexDescPrefix: .index
-    .prefix$ = string$ (.index) + emlManager_indexDescSep$
+    .prefix$ = emlManager_indexLabelLead$ + string$ (.index) + emlManager_indexDescSep$
+endproc
+
+# ----------------------------------------------------------------------------
+# Sec. 2a AMENDED (Ian, 1 Sep: visible index prefixes on every row are a
+# waste of space) -- THE ONE CANON both selection dialogs (install's
+# checklist and remove's Dialog 1) build their row labels through. Every
+# label starts BARE: pass 1 caps and sanitizes .name$#[i] + .suffix$#[i]
+# with no prefix at all (emlManagerApplyLabelCap with .prefix$ = ""). Pass 2
+# looks for any group of rows whose bare, capped, sanitized .label$ came out
+# identical, and rebuilds ONLY those rows' label and derived name through
+# the SAME cap-then-sanitize canon with their listing-index prefix
+# (emlManagerIndexPrefix, letter-initial so the derived variable never
+# starts with a digit) prepended -- every member of a colliding group is
+# rebuilt, not just the second one found, so the whole group becomes
+# mutually distinct rather than merely no-longer-matching row 1. A label
+# that stays bare is unique BECAUSE it stayed bare (pass 2 would have caught
+# it otherwise); a label the pass rebuilds is unique because the prefix
+# digits are identity, unique per row by construction (sec. 2a) -- so
+# .derived$# is guaranteed unique either way with no separate duplicate
+# guard needed (sec. 2d). .prefixed# tells each call site whether that row's
+# label carries the prefix, so the description comment / Dialog-2 line
+# (emlManagerIndexDescPrefix) can decide whether to show the matching
+# "n<i>." breadcrumb or nothing at all.
+# CALLER REQUIREMENT (measured, barren build 6.6.30): every element of
+# .name$# and .suffix$# must already have been WRITTEN by the caller (a
+# real assignment, however trivial -- "" included) rather than left at
+# empty$#'s own just-allocated default. This procedure concatenates
+# .name$#[i] and .suffix$#[i] (via emlManagerApplyLabelCap); concatenating
+# an untouched empty$# element -- even indirectly, copied through a plain
+# variable or passed on as a procedure argument -- segfaults the
+# interpreter outright, whether or not the element's own string value is
+# empty. A row with no suffix passes a real "" (assigned, not left raw),
+# never a bare empty$# slot -- see the callers' own comments.
+procedure emlManagerBuildLabels: .name$#, .suffix$#, .n, .cap
+    .cap0 = max (.n, 1)
+    .bare$# = empty$# (.cap0)
+    .label$# = empty$# (.cap0)
+    .derived$# = empty$# (.cap0)
+    .prefixed# = zero# (.cap0)
+
+    for .i from 1 to .n
+        @emlManagerApplyLabelCap: "", .name$# [.i], .suffix$# [.i], .cap
+        @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+        .bare$# [.i] = emlManagerDeriveLabel.label$
+        .label$# [.i] = emlManagerDeriveLabel.label$
+        .derived$# [.i] = emlManagerDeriveLabel.derived$
+    endfor
+
+    # Duplicate detection reads ONLY .bare$# (pass 1's untouched output),
+    # never .label$# -- .label$# is overwritten in place as this very loop
+    # runs, so comparing against it here would let an earlier row's already-
+    # rebuilt (prefixed) label silently stop matching a later row still
+    # holding the original bare text, undercounting the collision group.
+    for .i from 1 to .n
+        .isDup = 0
+        for .j from 1 to .n
+            if .j <> .i and .bare$# [.j] = .bare$# [.i]
+                .isDup = 1
+            endif
+        endfor
+        if .isDup = 1
+            .prefixed# [.i] = 1
+            @emlManagerIndexPrefix: .i
+            @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
+                ... .name$# [.i], .suffix$# [.i], .cap
+            @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+            .label$# [.i] = emlManagerDeriveLabel.label$
+            .derived$# [.i] = emlManagerDeriveLabel.derived$
+        endif
+    endfor
 endproc
 
 # ----------------------------------------------------------------------------
@@ -1985,11 +2075,23 @@ if not variableExists ("emlManager_harnessMode")
     path$# = empty$# (nKeep)
     proposal$# = empty$# (nKeep)
     renamed$# = empty$# (nKeep)
-    descLines$# = empty$# (nKeep)
+    fullName$# = empty$# (nKeep)
+    descSuffix$# = empty$# (nKeep)
     setupFlags# = zero# (nKeep)
     defaultFlags# = zero# (nKeep)
-    boolLabels$# = empty$# (nKeep)
-    derivedNames$# = empty$# (nKeep)
+    # MEASURED (barren build, 6.6.30): empty$#'s own elements are NOT plain
+    # "" strings until something actually writes to them -- concatenating
+    # (the "+" operator) an untouched element, however that concatenation is
+    # reached (directly, through a plain-assignment copy, or by passing it
+    # into a procedure argument), segfaults the interpreter outright. Every
+    # row here has no annotation suffix by definition, so every element is
+    # written explicitly (never left at empty$#'s own default) before this
+    # array is ever handed to emlManagerBuildLabels, which does concatenate
+    # .suffix$# through emlManagerApplyLabelCap.
+    noSuffix$# = empty$# (nKeep)
+    for iNoSuffix from 1 to nKeep
+        noSuffix$# [iNoSuffix] = ""
+    endfor
 
     kRow = 0
     for iFound from 1 to nFound
@@ -1999,33 +2101,48 @@ if not variableExists ("emlManager_harnessMode")
             path$# [kRow] = rawPath$# [iFound]
             proposal$# [kRow] = rawProposal$# [iFound]
             renamed$# [kRow] = rawRenamed$# [iFound]
-            # Sec. 2a: the description comment is prefixed with the same
-            # index as the checkbox label below, and states the FULL
-            # (uncapped) proposed name, so a shortened checkbox can always
-            # be resolved against it.
-            @emlManagerIndexDescPrefix: kRow
-            descLines$# [kRow] = emlManagerIndexDescPrefix.prefix$
-                ... + rawFullName$# [iFound] + " -- " + rawDesc$# [iFound]
+            # Full (uncapped) proposed name and the rest of the description
+            # text, carried alongside so the pass below can assemble
+            # descLines$# once every row's label -- and whether a collision
+            # forced it to carry the index prefix -- is known.
+            fullName$# [kRow] = rawFullName$# [iFound]
+            descSuffix$# [kRow] = rawDesc$# [iFound]
             setupFlags# [kRow] = rawSetup# [iFound]
             defaultFlags# [kRow] = rawDefault# [iFound]
-            # Sec. 2 (REVISED): the checkbox label always starts with the
-            # index prefix (identity, sec. 2a) -- middle-shortening only
-            # ever touches the name/suffix that follows it, so the derived
-            # readback variable is unique by construction and the cap
-            # invariant (sec. 2c) holds regardless.
-            @emlManagerIndexPrefix: kRow
-            @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
-                ... proposal$# [kRow], "", emlManager_boolLabelCap
-            @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
-            boolLabels$# [kRow] = emlManagerDeriveLabel.label$
-            derivedNames$# [kRow] = emlManagerDeriveLabel.derived$
         endif
+    endfor
+
+    # Sec. 2a AMENDED: one canon pass over every kept row builds every
+    # checkbox label -- bare by default, prefixed only for a row whose bare,
+    # capped, sanitized label collides with another's (emlManagerBuildLabels;
+    # shared with the remove flow's Dialog 1, "one canon" per sec. 2a).
+    # Install rows never carry an annotation suffix -- the manager/ghost
+    # suffixes are a remove-flow-only concept (sec. 1/2) -- so the per-row
+    # suffix array passed in is all "".
+    @emlManagerBuildLabels: proposal$#, noSuffix$#, nKeep, emlManager_boolLabelCap
+    boolLabels$# = emlManagerBuildLabels.label$#
+    derivedNames$# = emlManagerBuildLabels.derived$#
+    rowPrefixed# = emlManagerBuildLabels.prefixed#
+
+    # The description comment above each checkbox always states the FULL
+    # (uncapped) proposed name; it carries the matching "n<index>." index
+    # breadcrumb only for a row the canon above actually prefixed (sec. 2a)
+    # -- a bare checkbox's full name needs no breadcrumb to be resolved by.
+    descLines$# = empty$# (nKeep)
+    for iRow from 1 to nKeep
+        descPrefix$ = ""
+        if rowPrefixed# [iRow] = 1
+            @emlManagerIndexDescPrefix: iRow
+            descPrefix$ = emlManagerIndexDescPrefix.prefix$
+        endif
+        descLines$# [iRow] = descPrefix$ + fullName$# [iRow] + " -- " + descSuffix$# [iRow]
     endfor
 
     # --- Pre-dialog collision check (on PROPOSED names) ---
     # Sec. 2d: compares the REAL (uncapped) proposed identity, never a
-    # label -- the index prefix already makes derivedNames$# unique by
-    # construction (sec. 2a), so it can no longer signal a genuine name
+    # label -- emlManagerBuildLabels already makes derivedNames$# unique by
+    # construction (sec. 2a AMENDED: bare where distinct, index-prefixed
+    # where not), so a label collision can no longer signal a genuine name
     # collision here even if two rows did propose the same name.
 
     for iA from 1 to nKeep

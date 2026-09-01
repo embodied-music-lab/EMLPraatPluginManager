@@ -8,7 +8,7 @@ Author: Ian Howell, Embodied Music Lab.
 
 ## Status
 
-Version 0.2.0. Install-from-disk and the install script are
+Version 5.1.0. Install-from-disk and the install script are
 working and verified against the test harness in `harness/`,
 including installs of real published plugins in every supported
 archive shape.

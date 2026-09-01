@@ -67,5 +67,4 @@ took; nothing runs at startup.
 
 ## License
 
-Not yet chosen. The roadmap recommends a permissive license; the
-decision is pending.
+GNU General Public License v3.0. See the `LICENSE` file.

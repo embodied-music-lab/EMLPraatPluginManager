@@ -28,28 +28,28 @@ msgTooOld$ = "This installer needs Praat " + floorVersionLabel$ + " or newer. Yo
 msgAlreadyInstalled$ = "EML Plugin Manager is already installed. To update or repair it, use the Plugin manager menu inside Praat."
 msgSuccess$ = "Installed. Restart Praat to activate the Plugin manager menu."
 
-procedure emlpmB_versionOk
-  emlpmB_versionOk.result = 0
+procedure emlManagerVersionOk
+  emlManagerVersionOk.result = 0
   if praatVersion >= floorVersionNum
-    emlpmB_versionOk.result = 1
+    emlManagerVersionOk.result = 1
   endif
 endproc
 
-procedure emlpmB_alreadyInstalled
-  emlpmB_alreadyInstalled.result = 0
+procedure emlManagerAlreadyInstalled
+  emlManagerAlreadyInstalled.result = 0
   if folderExists (targetFolder$)
     if fileReadable (targetFolder$ + "/VERSION")
-      emlpmB_alreadyInstalled.result = 1
+      emlManagerAlreadyInstalled.result = 1
     endif
   endif
 endproc
 
-procedure emlpmB_writeSetup
+procedure emlManagerWriteSetup
   file$ = targetFolder$ + "/setup.praat"
   writeFileLine: file$, "Add menu command: ""Objects"", ""Praat"", ""EML Plugin Manager: About"", """", 0, ""about.praat"""
 endproc
 
-procedure emlpmB_writeAbout
+procedure emlManagerWriteAbout
   file$ = targetFolder$ + "/about.praat"
   writeFileLine: file$, "folder$ = preferencesDirectory$ + ""/plugin_EMLPluginManager"""
   appendFileLine: file$, "version$# = readLinesFromFile$# (folder$ + ""/VERSION"")"
@@ -58,70 +58,70 @@ procedure emlpmB_writeAbout
   appendFileLine: file$, "appendInfoLine: ""The full manager arrives in a later build."""
 endproc
 
-procedure emlpmB_writeReadme
+procedure emlManagerWriteReadme
   file$ = targetFolder$ + "/README.txt"
   writeFileLine: file$, "This folder contains the EML Plugin Manager."
   appendFileLine: file$, "It was installed by the EML Plugin Manager bootstrap installer."
   appendFileLine: file$, "It can be managed from the Plugin manager menu in a later build."
 endproc
 
-procedure emlpmB_writePayload
+procedure emlManagerWritePayload
   if not folderExists (targetFolder$)
     createFolder: targetFolder$
   endif
-  @emlpmB_writeSetup
-  @emlpmB_writeAbout
-  @emlpmB_writeReadme
+  @emlManagerWriteSetup
+  @emlManagerWriteAbout
+  @emlManagerWriteReadme
 endproc
 
-procedure emlpmB_verify (count)
-  emlpmB_verify.ok = 1
-  emlpmB_verify.failFile$ = ""
+procedure emlManagerVerify (count)
+  emlManagerVerify.ok = 1
+  emlManagerVerify.failFile$ = ""
   for i to count
     filePath$ = targetFolder$ + "/" + manifestPath$# [i]
     lines$# = readLinesFromFile$# (filePath$)
     if size (lines$#) <> manifestLines# [i]
-      if emlpmB_verify.ok = 1
-        emlpmB_verify.ok = 0
-        emlpmB_verify.failFile$ = manifestPath$# [i]
+      if emlManagerVerify.ok = 1
+        emlManagerVerify.ok = 0
+        emlManagerVerify.failFile$ = manifestPath$# [i]
       endif
     endif
   endfor
 endproc
 
-procedure emlpmB_writeVersion
+procedure emlManagerWriteVersion
   file$ = targetFolder$ + "/VERSION"
   writeFileLine: file$, payloadVersion$
 endproc
 
 beginPause: msgDialogTitle$
   comment: msgDialogBody$
-clicked = endPause: "Cancel", "Install", 1, 1
+clicked = endPause: "Quit", "Install", 2, 1
 
 if clicked = 2
-  @emlpmB_versionOk
-  if emlpmB_versionOk.result = 0
+  @emlManagerVersionOk
+  if emlManagerVersionOk.result = 0
     exitScript: msgTooOld$
   endif
 
-  @emlpmB_alreadyInstalled
-  if emlpmB_alreadyInstalled.result = 1
+  @emlManagerAlreadyInstalled
+  if emlManagerAlreadyInstalled.result = 1
     exitScript: msgAlreadyInstalled$
   endif
 
-  @emlpmB_writePayload
+  @emlManagerWritePayload
 
-  @emlpmB_verify: size (manifestPath$#) - 1
-  if emlpmB_verify.ok = 0
-    msgFailure$ = "The verify step failed on " + emlpmB_verify.failFile$ + ". Nothing needs to be cleaned up manually."
+  @emlManagerVerify: size (manifestPath$#) - 1
+  if emlManagerVerify.ok = 0
+    msgFailure$ = "The verify step failed on " + emlManagerVerify.failFile$ + ". Nothing needs to be cleaned up manually."
     exitScript: msgFailure$
   endif
 
-  @emlpmB_writeVersion
+  @emlManagerWriteVersion
 
-  @emlpmB_verify: size (manifestPath$#)
-  if emlpmB_verify.ok = 0
-    msgFailure$ = "The final verify step failed on " + emlpmB_verify.failFile$ + ". Nothing needs to be cleaned up manually."
+  @emlManagerVerify: size (manifestPath$#)
+  if emlManagerVerify.ok = 0
+    msgFailure$ = "The final verify step failed on " + emlManagerVerify.failFile$ + ". Nothing needs to be cleaned up manually."
     exitScript: msgFailure$
   endif
 

@@ -127,3 +127,28 @@ binary crashes when launched as `--run` with a script
 (GtkStyleContext); the working path is opening the script editor
 and driving Run by click. Praat's single-instance lock survives
 kill -9; restart the display stack between GUI cases.
+
+## v5.0 — namespace, version-aware collisions, wrap fix (1 September)
+
+Executed by delegated agents from the pinned spec
+`planning/HANDBACK_V5_POLISH_2026-09-01.md`; PraatGen not involved.
+The `emlpmL_`/`emlpmB_`/`k*` identifiers — a spec-side invention —
+are renamed into the project namespace: procedures `emlManager*`,
+constants `emlManager_*`, library flag `emlManager_harnessMode`
+(full mapping in the git diff). Bootstrap exit button now reads
+Quit, and its default button is corrected to Install (it had
+shipped defaulting to the exit button — caught during the rename
+review). New: `emlManagerCompareVersions` (component-wise; the
+future catalog comparator), `emlManagerReadVersion`, a difference
+probe (sorted relative file lists + setup.praat byte-equality),
+version-aware already-installed annotations with new checkbox
+defaults (equal / appears-identical / older = unchecked), and
+word-boundary wrapping of long description lines. Verified: 34/34
+extended harness, 17/17 headless regression, three GUI cases with
+screenshots (wrap fix clear of the checkbox; equal-version row
+unchecked with its annotation). Residual cosmetic: the 78-char
+wrap can still exceed the dialog's visual width by a word; a
+future touch may tighten to ~70. New measured 6.6.30 facts:
+`sort$#` works on string vectors; string comparison is
+lexicographic ASCII; `fileNames$#`/`folderNames$#` return sorted
+results; `readFile$` preserves exact bytes.

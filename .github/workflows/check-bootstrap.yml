@@ -1,0 +1,13 @@
+name: Bootstrap payload check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the bootstrap's embedded payload matches the plugin folder
+        run: python3 tools/build_bootstrap.py --check

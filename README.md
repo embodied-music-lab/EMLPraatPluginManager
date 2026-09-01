@@ -37,7 +37,12 @@ What the repository contains:
   handbacks that produced the code.
 - `tools/build_bootstrap.py` — regenerates the bootstrap's embedded
   payload from the plugin folder; `--check` verifies the two agree.
-  Run the check after any edit to the plugin folder.
+  After any edit to the plugin folder, run the tool, re-verify, and
+  commit the regenerated bootstrap with the edit.
+- `hooks/pre-commit` — refuses a commit when the bootstrap has
+  drifted from the plugin folder. Enable once per clone with
+  `git config core.hooksPath hooks`. CI runs the same check on
+  every push.
 
 ## Install
 

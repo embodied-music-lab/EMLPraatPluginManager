@@ -11,7 +11,7 @@
 folderName$ = "plugin_EMLPraatPluginManager"
 prefDir$ = preferencesDirectory$
 targetFolder$ = prefDir$ + "/" + folderName$
-payloadVersion$ = "0.1.0"
+payloadVersion$ = "0.2.0"
 
 floorMajor = 6
 floorMinor = 6

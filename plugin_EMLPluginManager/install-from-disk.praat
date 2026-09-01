@@ -11,7 +11,7 @@
 # Date: 1 September 2026
 # Version: 5.0
 #
-# 4.1 — Exit-button labels: buttons that stop the script now read "Quit"
+# 4.1 -- Exit-button labels: buttons that stop the script now read "Quit"
 #       (were "Cancel"). Rule: "Cancel" only when the action is cancelled
 #       but the script returns to another point; "Quit" when the script
 #       stops. Every exit path here calls exitScript, so all read "Quit".
@@ -42,7 +42,7 @@ emlManager_extZip$ = ".zip"
 emlManager_extTarGz$ = ".tar.gz"
 emlManager_extTgz$ = ".tgz"
 
-# Characters that may appear in a plugin_ name reference (§5 content scan)
+# Characters that may appear in a plugin_ name reference (sec. 5 content scan)
 emlManager_nameChars$ = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
 
 emlManager_title$ = "Install Plugin from Disk"
@@ -416,7 +416,7 @@ endproc
 # ----------------------------------------------------------------------------
 # In-memory BFS walk with a growable vector queue. No cap; doubles on
 # overflow. Collects all plugin_ folders AND plugin_ near-misses (folders whose
-# name CONTAINS plugin_ past the first character, per §3), excludes __MACOSX
+# name CONTAINS plugin_ past the first character, per sec. 3), excludes __MACOSX
 # subtrees. Near-miss gating and dropping happens later, per-candidate.
 # Input: .root$ (search root), .resultsFile$ (write found paths here)
 # Output: .count (number of candidate folders found)
@@ -473,7 +473,7 @@ endproc
 # ----------------------------------------------------------------------------
 # A folder name is a candidate if it starts with plugin_ (true match) OR
 # contains plugin_ at any later position (near-miss). Case-sensitive on
-# plugin_ (Praat's own activation rule is the authority, §3).
+# plugin_ (Praat's own activation rule is the authority, sec. 3).
 procedure emlManagerIsCandidateName: .name$
     .yes = 0
     if startsWith (.name$, emlManager_pluginPrefix$)
@@ -484,10 +484,10 @@ procedure emlManagerIsCandidateName: .name$
 endproc
 
 # ----------------------------------------------------------------------------
-# §4 junk-token test. A trailing token is junk if (case-insensitively) it is a
+# sec. 4 junk-token test. A trailing token is junk if (case-insensitively) it is a
 # branch word, a 7-40 char hex hash, a version (optional v, up to three
 # dot-separated digit groups, optional single trailing letter), or a copy
-# artifact (copy / copyN / (N)). Regex dialect + all §9 tokens sandbox-verified
+# artifact (copy / copyN / (N)). Regex dialect + all sec. 9 tokens sandbox-verified
 # 31 Aug 2026 (Praat 7.0.02).
 procedure emlManagerIsJunkToken: .tok$
     .low$ = replace_regex$ (.tok$, "[A-Z]", "\L&", 0)
@@ -506,7 +506,7 @@ procedure emlManagerIsJunkToken: .tok$
 endproc
 
 # ----------------------------------------------------------------------------
-# One §4 stripping pass. Finds the LEFTMOST separator (-, _, ., space) whose
+# One sec. 4 stripping pass. Finds the LEFTMOST separator (-, _, ., space) whose
 # ENTIRE tail is a single junk token (this yields the longest trailing token,
 # so a dotted version like 1.2.0 is taken whole, not one dot-group at a time).
 # HARD GUARD: never strip down to emlManager_pluginPrefix$ or shorter; on hitting the
@@ -541,8 +541,8 @@ procedure emlManagerStripOnce: .name$
 endproc
 
 # ----------------------------------------------------------------------------
-# §3-§5 per-candidate canonicalization. PURE (no I/O) -- the harness drives the
-# whole §9 normative table through this procedure.
+# sec. 3-sec. 5 per-candidate canonicalization. PURE (no I/O) -- the harness drives the
+# whole sec. 9 normative table through this procedure.
 # Input:
 #   .literal$    the folder name as found
 #   .hasSetup    1 if the folder has a top-level setup.praat, else 0
@@ -557,7 +557,7 @@ endproc
 #   .renamedFrom$ the literal name when proposal <> literal, else ""
 procedure emlManagerCanonicalName: .literal$, .hasSetup, .contentRef$
     .prefixLen = length (emlManager_pluginPrefix$)
-    # --- match type + candidate stem (§3) ---
+    # --- match type + candidate stem (sec. 3) ---
     if startsWith (.literal$, emlManager_pluginPrefix$)
         .isNearMiss = 0
         .stem$ = .literal$
@@ -566,7 +566,7 @@ procedure emlManagerCanonicalName: .literal$, .hasSetup, .contentRef$
         .firstIdx = index (.literal$, emlManager_pluginPrefix$)
         .stem$ = mid$ (.literal$, .firstIdx, length (.literal$) - .firstIdx + 1)
     endif
-    # --- §4 suffix stripping, max 3 iterations ---
+    # --- sec. 4 suffix stripping, max 3 iterations ---
     .work$ = .stem$
     .iter = 0
     .changed = 1
@@ -581,7 +581,7 @@ procedure emlManagerCanonicalName: .literal$, .hasSetup, .contentRef$
         endif
     endwhile
     .heuristic$ = .work$
-    # --- §5 content override ---
+    # --- sec. 5 content override ---
     .confirmed = 0
     if .contentRef$ = "literal"
         .proposal$ = .literal$
@@ -597,7 +597,7 @@ procedure emlManagerCanonicalName: .literal$, .hasSetup, .contentRef$
     else
         .renamedFrom$ = ""
     endif
-    # --- disposition (§5 near-miss gating) ---
+    # --- disposition (sec. 5 near-miss gating) ---
     if .isNearMiss = 0
         .row$ = "row"
     else
@@ -612,7 +612,7 @@ procedure emlManagerCanonicalName: .literal$, .hasSetup, .contentRef$
 endproc
 
 # ----------------------------------------------------------------------------
-# §5 content-evidence scan. Reads every *.praat file in the folder (recursive,
+# sec. 5 content-evidence scan. Reads every *.praat file in the folder (recursive,
 # string matching only, never execution), collects maximal plugin_<namechars>
 # matches, and applies the subpath-resolution discriminator to decide whether a
 # match equal to the proposal or the literal is INTERNAL (counts) or EXTERNAL
@@ -1164,7 +1164,7 @@ if not variableExists ("emlManager_harnessMode")
             annotCmd$ = emlManager_annotNoSetup$
         endif
 
-        # §5 name annotation
+        # sec. 5 name annotation
         annot5$ = ""
         if contentRef$ = "literal"
             annot5$ = emlManager_annotKeepsName$
@@ -1213,7 +1213,7 @@ if not variableExists ("emlManager_harnessMode")
             ... + ") -- at " + relPath$
     endfor
 
-    # --- §6 ancestor collapse: drop an ancestor whose proposal equals a
+    # --- sec. 6 ancestor collapse: drop an ancestor whose proposal equals a
     #     descendant's proposal (double-zip wrapper). Keep the innermost. ---
 
     for iA from 1 to nFound
@@ -1340,7 +1340,7 @@ if not variableExists ("emlManager_harnessMode")
         exitScript: emlManager_msgNoneSelected$
     endif
 
-    # --- Resolve install names (§7 literal toggle) ---
+    # --- Resolve install names (sec. 7 literal toggle) ---
 
     installName$# = empty$# (nKeep)
     for iRow from 1 to nKeep

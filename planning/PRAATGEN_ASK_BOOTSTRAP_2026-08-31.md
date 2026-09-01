@@ -88,6 +88,16 @@ Top to bottom:
    three payload files → verify them → write `VERSION` → final
    verify of all four → final message.
 
+AMENDED 2026-09-01: the payload is an exact embedded copy of the
+real plugin — `setup.praat`, `install-from-disk.praat`, `VERSION`
+— written line by line with quote doubling. The extracted folder
+must be byte-identical to `plugin_EMLPluginManager/` in the
+repository, which requires the plugin sources to stay pure ASCII
+(Praat's `writeFileLine` switches the whole file to UTF-16 when
+any character is non-ASCII). The earlier 4-file stub payload
+(About command, README) is retired. `VERSION` stays last as the
+completion marker.
+
 ## Behavior (fixed)
 
 - Confirmation dialog before anything is written. Text, verbatim:
@@ -96,6 +106,11 @@ Top to bottom:
   on your computer is touched. Praat may ask for permission to
   write files; choose \"Approve for this session\"."; buttons
   Cancel / Install.
+- Dialog body rendering rule: pause-window comment fields do not
+  wrap text. Pre-wrap multi-sentence body text at authoring time
+  to lines of at most ~62 characters, store the lines as a string
+  vector, and render one `comment:` field per line. A single
+  `comment:` carrying a full paragraph is a defect.
 - Praat too old: stop with, verbatim: "This installer needs Praat
   6.6.30 or newer. You have <version>. Please update Praat from
   praat.org and run this installer again."

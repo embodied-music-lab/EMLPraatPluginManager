@@ -35,6 +35,9 @@ What the repository contains:
   and screenshot evidence.
 - `planning/` — the pinned generation specifications and review
   handbacks that produced the code.
+- `tools/build_bootstrap.py` — regenerates the bootstrap's embedded
+  payload from the plugin folder; `--check` verifies the two agree.
+  Run the check after any edit to the plugin folder.
 
 ## Install
 

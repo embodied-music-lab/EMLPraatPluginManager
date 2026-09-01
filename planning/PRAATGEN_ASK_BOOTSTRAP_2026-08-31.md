@@ -96,7 +96,12 @@ repository, which requires the plugin sources to stay pure ASCII
 (Praat's `writeFileLine` switches the whole file to UTF-16 when
 any character is non-ASCII). The earlier 4-file stub payload
 (About command, README) is retired. `VERSION` stays last as the
-completion marker.
+completion marker. The embedded copy is maintained mechanically:
+`tools/build_bootstrap.py` regenerates it from the plugin folder
+(folder-name constant, payload version from the plugin's VERSION
+file, manifest line counts, writer procedures), and its `--check`
+mode fails when the two disagree. The plugin folder is the single
+source of truth; hand edits to the embedded payload are defects.
 
 ## Behavior (fixed)
 

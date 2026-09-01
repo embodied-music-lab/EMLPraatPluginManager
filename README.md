@@ -8,7 +8,7 @@ Author: Ian Howell, Embodied Music Lab.
 
 ## Status
 
-Version 0.1.0. Install-from-disk and the bootstrap installer are
+Version 0.2.0. Install-from-disk and the install script are
 working and verified against the test harness in `harness/`,
 including installs of real published plugins in every supported
 archive shape.
@@ -27,19 +27,20 @@ What the repository contains:
   folder.
 - `plugin_EMLPraatPluginManager/setup.praat` — registers the menu
   command.
-- `bootstrap/eml-plugin-manager-install.praat` — a one-file script
-  that installs the manager itself. Open it in Praat, run it,
-  restart Praat.
+- `eml-plugin-manager-install.praat` (repo root) — the install
+  file: one self-contained script that installs the manager. Open
+  it in Praat, run it, restart Praat. It is regenerated from the
+  plugin folder and is the file to distribute, from anywhere.
 - `docs/` — the product design roadmap and FAQ.
 - `harness/` — the verification driver, fixtures, drive record,
   and screenshot evidence.
 - `planning/` — the pinned generation specifications and review
   handbacks that produced the code.
-- `tools/build_bootstrap.py` — regenerates the bootstrap's embedded
-  payload from the plugin folder; `--check` verifies the two agree.
-  After any edit to the plugin folder, run the tool, re-verify, and
-  commit the regenerated bootstrap with the edit.
-- `hooks/pre-commit` — refuses a commit when the bootstrap has
+- `tools/build_installer.py` — regenerates the install file from
+  the plugin folder; `--check` verifies the two agree. After any
+  edit to the plugin folder, run the tool and commit the
+  regenerated install file with the edit.
+- `hooks/pre-commit` — refuses a commit when the install file has
   drifted from the plugin folder. Enable once per clone with
   `git config core.hooksPath hooks`. CI runs the same check on
   every push.
@@ -48,8 +49,8 @@ What the repository contains:
 
 Two routes:
 
-1. **Bootstrap (recommended).** Download
-   `bootstrap/eml-plugin-manager-install.praat`, open it in Praat
+1. **Install file (recommended).** Download
+   `eml-plugin-manager-install.praat`, open it in Praat
    (**Praat > Open Praat script...**), and run it. Restart Praat.
 2. **Manual.** Copy `plugin_EMLPraatPluginManager/` into your Praat
    preferences folder and restart Praat. The preferences folder is

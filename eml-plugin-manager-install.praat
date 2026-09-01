@@ -1,4 +1,4 @@
-# EML Plugin Manager bootstrap installer.
+# EML Plugin Manager install script.
 # Creates plugin_EMLPraatPluginManager in Praat's preferences folder and
 # writes its payload files.
 #

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Regenerate or check the bootstrap installer's embedded payload.
+"""Regenerate or check the install script's embedded payload.
 
 The plugin folder (plugin_*/ at the repository root) is the single
-source of truth. The bootstrap at bootstrap/eml-plugin-manager-install.praat
+source of truth. The install file at eml-plugin-manager-install.praat (repo root)
 carries an embedded copy of every plugin file; this tool rewrites that
 copy — the folder-name constant, the payload version (read from the
 plugin's VERSION file), the manifest with line counts, and one writer
 procedure per embedded file — so the copy cannot drift from the plugin.
 
 Usage:
-  python3 tools/build_bootstrap.py           # regenerate in place
-  python3 tools/build_bootstrap.py --check   # exit 1 if the committed
-                                             # bootstrap differs from a
+  python3 tools/build_installer.py           # regenerate in place
+  python3 tools/build_installer.py --check   # exit 1 if the committed
+                                             # install file differs from a
                                              # fresh regeneration
 
 Run --check after any edit to the plugin folder; run the default mode
-to bring the bootstrap back into agreement, then re-verify with the
+to bring the install script back into agreement, then re-verify with the
 headless payload test and the GUI drive.
 
 Payload sources must be pure ASCII: Praat's writeFileLine switches the
@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-BOOTSTRAP = REPO / "bootstrap" / "eml-plugin-manager-install.praat"
+INSTALLER = REPO / "eml-plugin-manager-install.praat"
 
 # VERSION must stay last: it is the completion marker the
 # already-installed check keys on.
@@ -36,7 +36,7 @@ PAYLOAD_ORDER = ["setup.praat", "install-from-disk.praat", "VERSION"]
 
 
 def fail(msg):
-    print(f"build_bootstrap: {msg}", file=sys.stderr)
+    print(f"build_installer: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -100,7 +100,7 @@ def regenerate(src):
     src, n = re.subn(r'manifestPath\$# = \{[^}]*\}\nmanifestLines# = \{[^}]*\}',
                      manifest, src, count=1)
     if n != 1:
-        fail("could not locate the manifest block in the bootstrap")
+        fail("could not locate the manifest block in the install script")
 
     for name in PAYLOAD_ORDER:
         if name == "VERSION":
@@ -113,26 +113,26 @@ def regenerate(src):
         src, n = re.subn(rf'procedure {proc}\n.*?\nendproc',
                          lambda _m, b=body: b, src, count=1, flags=re.S)
         if n != 1:
-            fail(f"could not locate procedure {proc} in the bootstrap")
+            fail(f"could not locate procedure {proc} in the install script")
 
     return src
 
 
 def main():
     check = "--check" in sys.argv[1:]
-    current = BOOTSTRAP.read_text(encoding="ascii")
+    current = INSTALLER.read_text(encoding="ascii")
     fresh = regenerate(current)
     if check:
         if fresh != current:
-            fail("bootstrap payload DRIFTED from the plugin folder — "
-             "run tools/build_bootstrap.py to regenerate, then re-verify")
-        print("build_bootstrap: check OK — bootstrap payload matches the plugin folder")
+            fail("install file DRIFTED from the plugin folder — "
+             "run tools/build_installer.py to regenerate, then re-verify")
+        print("build_installer: check OK — install file matches the plugin folder")
         return
     if fresh == current:
-        print("build_bootstrap: already in agreement, nothing written")
+        print("build_installer: already in agreement, nothing written")
         return
-    BOOTSTRAP.write_text(fresh, encoding="ascii")
-    print("build_bootstrap: bootstrap regenerated — re-verify before committing "
+    INSTALLER.write_text(fresh, encoding="ascii")
+    print("build_installer: install file regenerated — re-verify before committing "
           "(headless payload test + GUI drive)")
 
 

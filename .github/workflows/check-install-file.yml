@@ -1,0 +1,13 @@
+name: Install-file check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the install file matches the plugin folder
+        run: python3 tools/build_installer.py --check

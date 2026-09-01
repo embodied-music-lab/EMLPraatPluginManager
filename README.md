@@ -8,7 +8,7 @@ Author: Ian Howell, Embodied Music Lab.
 
 ## Status
 
-Version 0.6.2 (beta). Version 1.0.0 will be the first public
+Version 0.7.0 (beta). Version 1.0.0 will be the first public
 release. Install-from-disk, remove, and the install script are
 working and verified against the test harness in `harness/`,
 including installs and removals of real published plugins in every
@@ -33,6 +33,13 @@ What the repository contains:
   is copied to the archive folder and the copy's file inventory
   verified before any original is deleted; nothing is ever deleted
   without an archived copy.
+- `plugin_EMLPraatPluginManager/create-install-file.praat` — generates
+  a standalone `install-<name>.praat` inside an already-installed
+  plugin's own folder, so the plugin's author can zip the folder as
+  usual and a user can install it by opening and running that one
+  file, with no copy of this manager on their machine. Regenerate it
+  after adding or removing files in the plugin's folder, or after
+  changing `setup.praat`'s registered commands.
 - `plugin_EMLPraatPluginManager/setup.praat` — registers the menu
   commands.
 - `eml-plugin-manager-install.praat` (repo root) — the install

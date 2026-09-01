@@ -32,7 +32,8 @@ INSTALLER = REPO / "eml-plugin-manager-install.praat"
 
 # VERSION must stay last: it is the completion marker the
 # already-installed check keys on.
-PAYLOAD_ORDER = ["setup.praat", "install-from-disk.praat", "remove-plugin.praat", "VERSION"]
+PAYLOAD_ORDER = ["setup.praat", "install-from-disk.praat", "remove-plugin.praat",
+                 "create-install-file.praat", "VERSION"]
 
 
 def fail(msg):
@@ -73,36 +74,41 @@ def writer_lines(lines):
 def proc_name(filename):
     return {"setup.praat": "emlManagerWriteSetup",
             "install-from-disk.praat": "emlManagerWriteInstaller",
-            "remove-plugin.praat": "emlManagerWriteRemover"}[filename]
+            "remove-plugin.praat": "emlManagerWriteRemover",
+            "create-install-file.praat": "emlManagerWriteCreateInstallFile"}[filename]
 
 
 INCLUDE_RE = re.compile(r'^include \.\./([A-Za-z0-9_]+)/install-from-disk\.praat\s*$', re.M)
 
 
-def check_remover_include(plug):
-    """remove-plugin.praat must include the installer via the pinned
+INCLUDING_MODULES = ["remove-plugin.praat", "create-install-file.praat"]
+
+
+def check_module_includes(plug):
+    """Every module that includes the installer must use the pinned
     '../<plugin folder>/' form (include resolves relative to the
-    OUTERMOST running script's folder — see the remove spec). If the
-    plugin folder is ever renamed, this include line must be updated
-    to match, or the module silently breaks; fail loudly instead."""
-    remover = plug / "remove-plugin.praat"
-    if not remover.exists():
-        fail(f"{remover.relative_to(REPO)} not found")
-    text = remover.read_text(encoding="ascii")
-    m = INCLUDE_RE.search(text)
-    if not m:
-        fail(f"{remover.relative_to(REPO)} has no '../<plugin_*>/install-from-disk.praat' "
-             "include line in the pinned form")
-    named = m.group(1)
-    if named != plug.name:
-        fail(f"{remover.relative_to(REPO)} includes installer via folder "
-             f"\"{named}\", but the actual plugin folder is \"{plug.name}\" — "
-             "update the include line to match the renamed folder")
+    OUTERMOST running script's folder). If the plugin folder is ever
+    renamed, each include line must be updated to match, or the
+    module silently breaks; fail loudly instead."""
+    for name in INCLUDING_MODULES:
+        module = plug / name
+        if not module.exists():
+            fail(f"{module.relative_to(REPO)} not found")
+        text = module.read_text(encoding="ascii")
+        m = INCLUDE_RE.search(text)
+        if not m:
+            fail(f"{module.relative_to(REPO)} has no '../<plugin_*>/install-from-disk.praat' "
+                 "include line in the pinned form")
+        named = m.group(1)
+        if named != plug.name:
+            fail(f"{module.relative_to(REPO)} includes installer via folder "
+                 f"\"{named}\", but the actual plugin folder is \"{plug.name}\" — "
+                 "update the include line to match the renamed folder")
 
 
 def regenerate(src):
     plug = plugin_dir()
-    check_remover_include(plug)
+    check_module_includes(plug)
     found = sorted(p.name for p in plug.iterdir() if p.is_file())
     if found != sorted(PAYLOAD_ORDER):
         fail(f"plugin folder contains {found}, expected exactly {sorted(PAYLOAD_ORDER)}; "

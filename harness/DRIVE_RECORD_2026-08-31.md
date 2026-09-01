@@ -195,3 +195,15 @@ present-tense rules (measured at Praat 6.6.30 unless otherwise noted):
   relative path corrupts staging paths built from it.
 - Enumerate windows via `_NET_CLIENT_LIST`; window titles use curly
   quotes, so `xdotool search --name` with straight quotes misses them.
+- `preferencesDirectory$` is version-correct: Praat 6.6.30 reports
+  `~/.praat-dir` and Praat 7.0.02 reports `~/.config/praat` on Linux
+  (measured, same probe script). Always read it at RUNTIME; never
+  bake or hardcode a preferences path — a script generated under one
+  Praat version must land in the right folder under another.
+- `include` is resolved when Praat PARSES a script, before any line
+  executes: a script cannot generate a file and include it in the
+  same run. Test a generated script from a separate `praat --run`
+  subprocess.
+- Harness blind spot to guard against: driving work procedures with
+  correct arguments proves the procedures, not the main sequence's
+  own call sites. Interactive argument-passing needs the GUI drive.

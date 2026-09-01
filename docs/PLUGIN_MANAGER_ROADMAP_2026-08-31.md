@@ -73,7 +73,7 @@ at every startup).
 Five parts. The second is what makes this community infrastructure
 rather than an EML convenience.
 
-1. **The manager plugin** (`plugin_EMLPluginManager`): one submenu —
+1. **The manager plugin** (`plugin_EMLPraatPluginManager`): one submenu —
    Install or update plugins, Check for updates, Remove a plugin,
    Settings. Reads the catalog over HTTPS (`curl` to stdout),
    downloads archives, verifies SHA-256, unpacks with `tar`,

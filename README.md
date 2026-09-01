@@ -15,7 +15,7 @@ archive shape.
 
 What the repository contains:
 
-- `plugin_EMLPluginManager/install-from-disk.praat` — installs an
+- `plugin_EMLPraatPluginManager/install-from-disk.praat` — installs an
   already-downloaded plugin (`.zip`, `.tar.gz`/`.tgz`, or an
   unpacked folder). Finds every `plugin_` folder at any depth
   inside the source and presents a checklist. Offers a canonical
@@ -25,7 +25,7 @@ What the repository contains:
   (newer, equal, older) before you decide. Archives any plugin it
   replaces and never deletes anything except its own staging
   folder.
-- `plugin_EMLPluginManager/setup.praat` — registers the menu
+- `plugin_EMLPraatPluginManager/setup.praat` — registers the menu
   command.
 - `bootstrap/eml-plugin-manager-install.praat` — a one-file script
   that installs the manager itself. Open it in Praat, run it,
@@ -43,7 +43,7 @@ Two routes:
 1. **Bootstrap (recommended).** Download
    `bootstrap/eml-plugin-manager-install.praat`, open it in Praat
    (**Praat > Open Praat script...**), and run it. Restart Praat.
-2. **Manual.** Copy `plugin_EMLPluginManager/` into your Praat
+2. **Manual.** Copy `plugin_EMLPraatPluginManager/` into your Praat
    preferences folder and restart Praat. The preferences folder is
    named in Praat's manual under "preferences folder".
 

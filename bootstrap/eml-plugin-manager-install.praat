@@ -1,5 +1,5 @@
 # EML Plugin Manager bootstrap installer.
-# Creates plugin_EMLPluginManager in Praat's preferences folder and
+# Creates plugin_EMLPraatPluginManager in Praat's preferences folder and
 # writes its payload files.
 #
 # ATTRIBUTION
@@ -8,7 +8,7 @@
 #            https://github.com/embodied-music-lab/PraatGen
 # Code generation: Claude (Anthropic)
 
-folderName$ = "plugin_EMLPluginManager"
+folderName$ = "plugin_EMLPraatPluginManager"
 prefDir$ = preferencesDirectory$
 targetFolder$ = prefDir$ + "/" + folderName$
 payloadVersion$ = "0.1.0"

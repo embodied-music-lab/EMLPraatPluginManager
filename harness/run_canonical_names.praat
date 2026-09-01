@@ -11,7 +11,7 @@
 
 # Load the installer as a library (main sequence suppressed by this flag).
 emlManager_harnessMode = 1
-include ../plugin_EMLPluginManager/install-from-disk.praat
+include ../plugin_EMLPraatPluginManager/install-from-disk.praat
 
 tsv$ = "canonical_names.tsv"
 if not fileReadable (tsv$)

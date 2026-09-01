@@ -19,7 +19,7 @@ choice.
 
 One file, `eml-plugin-manager-install.praat`: a self-extracting
 installer. When a user opens it in Praat and clicks Run, it creates
-`plugin_EMLPluginManager` inside Praat's preferences folder and
+`plugin_EMLPraatPluginManager` inside Praat's preferences folder and
 writes the embedded payload files into it. Nothing else.
 
 ## Hard constraints
@@ -58,7 +58,7 @@ writes the embedded payload files into it. Nothing else.
 Top to bottom:
 
 1. A constants section: procedures or variables defining the folder
-   name (`plugin_EMLPluginManager`), the payload version (`0.1.0`),
+   name (`plugin_EMLPraatPluginManager`), the payload version (`0.1.0`),
    the payload manifest (each file's relative path and its line
    count), and every message string.
 2. Work procedures, each independently callable so a test driver can
@@ -91,7 +91,7 @@ Top to bottom:
 AMENDED 2026-09-01: the payload is an exact embedded copy of the
 real plugin — `setup.praat`, `install-from-disk.praat`, `VERSION`
 — written line by line with quote doubling. The extracted folder
-must be byte-identical to `plugin_EMLPluginManager/` in the
+must be byte-identical to `plugin_EMLPraatPluginManager/` in the
 repository, which requires the plugin sources to stay pure ASCII
 (Praat's `writeFileLine` switches the whole file to UTF-16 when
 any character is non-ASCII). The earlier 4-file stub payload

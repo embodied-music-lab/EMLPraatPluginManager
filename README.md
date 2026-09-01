@@ -8,30 +8,46 @@ Author: Ian Howell, Embodied Music Lab.
 
 ## Status
 
-Early development. What exists today:
+Version 0.1.0. Install-from-disk and the bootstrap installer are
+working and verified against the test harness in `harness/`,
+including installs of real published plugins in every supported
+archive shape.
+
+What the repository contains:
 
 - `plugin_EMLPluginManager/install-from-disk.praat` — installs an
   already-downloaded plugin (`.zip`, `.tar.gz`/`.tgz`, or an
   unpacked folder). Finds every `plugin_` folder at any depth
-  inside the source, presents a checklist, archives any same-named
-  installed plugin before replacing it, and never deletes anything
-  except its own staging folder. Specification-complete; the
-  adversarial verification pass has not yet run.
-- `plugin_EMLPluginManager/setup.praat` — registers the one working
+  inside the source and presents a checklist. Offers a canonical
+  rename when a folder name carries a suffix such as `-main` (your
+  choice — it never forces one). When a same-named plugin is
+  already installed, compares versions and labels each choice
+  (newer, equal, older) before you decide. Archives any plugin it
+  replaces and never deletes anything except its own staging
+  folder.
+- `plugin_EMLPluginManager/setup.praat` — registers the menu
   command.
+- `bootstrap/eml-plugin-manager-install.praat` — a one-file script
+  that installs the manager itself. Open it in Praat, run it,
+  restart Praat.
 - `docs/` — the product design roadmap and FAQ.
+- `harness/` — the verification driver, fixtures, drive record,
+  and screenshot evidence.
 - `planning/` — the pinned generation specifications and review
   handbacks that produced the code.
-- `bootstrap/` — will hold the generated one-file installer that
-  installs this manager itself (specification in `planning/`;
-  regeneration pending).
-- `harness/` — will hold the verification driver and fixtures.
 
-## Install (current, manual — the bootstrap replaces this)
+## Install
 
-Copy `plugin_EMLPluginManager/` into your Praat preferences folder
-and restart Praat. The preferences folder is named in Praat's
-manual under "preferences folder".
+Two routes:
+
+1. **Bootstrap (recommended).** Download
+   `bootstrap/eml-plugin-manager-install.praat`, open it in Praat
+   (**Praat > Open Praat script...**), and run it. Restart Praat.
+2. **Manual.** Copy `plugin_EMLPluginManager/` into your Praat
+   preferences folder and restart Praat. The preferences folder is
+   named in Praat's manual under "preferences folder".
+
+After installing, the manager's commands appear in the Praat menu.
 
 ## Requirements
 

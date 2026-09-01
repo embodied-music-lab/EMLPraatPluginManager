@@ -1,0 +1,36 @@
+menu	Adds "JJATools" to the Praat menu in the Objects window.
+menu	Adds "Save selected objects..." to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Copy selected objects..." to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "View each (selected)" to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "View each (from disk)" to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Sort selected objects..." to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Formats -" to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Save selected objects to JSON..." to the Praat menu in the Objects window, under "Formats -".
+menu	Adds "Object selection -" to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Select one type..." to the Praat menu in the Objects window, under "Object selection -".
+menu	Adds "Invert selection" to the Praat menu in the Objects window, under "Object selection -".
+menu	Adds "Batch processing -" to the Praat menu in the Objects window, under "JJATools".
+menu	Adds "Move boundaries to zero crossings..." to the Praat menu in the Objects window, under "Batch processing -".
+menu	Adds "TextGrids to Audacity labels..." to the Praat menu in the Objects window, under "Batch processing -".
+menu	Adds "Convert to JSON..." to the Praat menu in the Objects window, under "Batch processing -".
+menu	Adds "Generate Pitch (two-pass)..." to the Praat menu in the Objects window, under "Batch processing -".
+action	Adds a "Filter and center..." button that appears when you select a Sound.
+action	Adds a "Normalise (RMS)..." button that appears when you select a Sound.
+action	Adds a "To Pitch (two-pass)..." button that appears when you select a Sound.
+action	Adds a "Sort (generic)..." button that appears when you select a Strings.
+action	Adds a "Extract strings..." button that appears when you select a Strings.
+action	Adds a "Find label..." button that appears when you select a TextGrid.
+action	Adds a "Save as Audacity label..." button that appears when you select a TextGrid.
+action	Adds a "Extract labels..." button that appears when you select a Sound and a TextGrid.
+action	Adds a "Move boundaries to zero-crossings..." button that appears when you select a Sound and a TextGrid.
+action	Adds a "View each as pairs" button that appears when you select a Sound and a TextGrid.
+action	Adds a "View each" button that appears when you select an Intensity.
+action	Adds a "View each" button that appears when you select a Pitch.
+action	Adds a "View each" button that appears when you select a Sound.
+action	Adds a "Save as JSON file..." button that appears when you select a TextGrid.
+action	Adds a "Save as JSON file..." button that appears when you select a PointProcess.
+action	Adds a "Save as JSON file..." button that appears when you select a DurationTier.
+action	Adds a "Save as JSON file..." button that appears when you select an IntensityTier.
+action	Adds a "Save as JSON file..." button that appears when you select an Intensity.
+action	Adds a "Save as JSON file..." button that appears when you select an AmplitudeTier.
+action	Adds a "Save as JSON file..." button that appears when you select a PitchTier.

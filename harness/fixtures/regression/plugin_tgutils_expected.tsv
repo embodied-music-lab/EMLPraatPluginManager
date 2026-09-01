@@ -1,0 +1,12 @@
+action	Adds a "Find label..." button that appears when you select a TextGrid.
+action	Adds a "Index specified labels..." button that appears when you select a TextGrid.
+action	Adds a "Get tier by name..." button that appears when you select a TextGrid.
+action	Adds a "Save as Audacity label..." button that appears when you select a TextGrid.
+action	Adds a "Count points in range..." button that appears when you select a TextGrid.
+action	Adds a "Explode TextGrid..." button that appears when you select a TextGrid.
+action	Adds a "Explode TextGrid..." button that appears when you select a TextGrid and a Sound.
+action	Adds a "Move boundaries to zero crossings..." button that appears when you select a TextGrid and a Sound.
+action	Adds a "Extract labels..." button that appears when you select a TextGrid and a Sound.
+action	Adds a "Extract labels..." button that appears when you select a TextGrid and a LongSound.
+action	Adds a "To non-overlapping intervals" button that appears when you select a TextGrid.
+action	Adds a "Apply to TextGrid" button that appears when you select a TextGrid and a DurationTier.

@@ -1,0 +1,15 @@
+menu	Adds "--" to the New menu in the Objects window.
+menu	Adds "AERoPlot" to the New menu in the Objects window.
+menu	Adds "Load example sound and text grid..." to the New menu in the Objects window, under "AERoPlot".
+action	Adds a "" button that appears when you select a Table.
+action	Adds a "AERoPlot" button that appears when you select a Table.
+action	Adds a "Formants-over-time Plot..." button that appears when you select a Table.
+action	Adds a "Ladefoged Formant Plot..." button that appears when you select a Table.
+action	Adds a "F1F2 Plot..." button that appears when you select a Table.
+action	Adds a "" button that appears when you select a Sound and a TextGrid.
+action	Adds a "AERoPlot" button that appears when you select a Sound and a TextGrid.
+action	Adds a "Create data table from nested textgrid tiers..." button that appears when you select a Sound and a TextGrid.
+action	Adds a "C3P-o-Gram..." button that appears when you select a Sound and a TextGrid.
+action	Adds a "" button that appears when you select a Sound.
+action	Adds a "AERoPlot" button that appears when you select a Sound.
+action	Adds a "C3P-o-Gram..." button that appears when you select a Sound.

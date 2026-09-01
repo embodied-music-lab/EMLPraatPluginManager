@@ -1,0 +1,31 @@
+Add menu command: "Objects", "Praat", "Orphan Item", "", 1, "orphan.praat"	menu	Adds "Orphan Item" to the Praat menu in the Objects window.	depth-1, no known parent yet -- under-clause omitted
+Add menu command: "Objects", "New", "Create Sound", "", 0, "create.praat"	menu	Adds "Create Sound" to the New menu in the Objects window.	modern menu, depth 0, New menu
+Add menu command: "Objects", "New", "Create Sound Long", "", 1, "create_long.praat"	menu	Adds "Create Sound Long" to the New menu in the Objects window, under "Create Sound".	modern menu, depth 1, under-clause
+Add menu command: "Objects", "Praat", "EML Tools", "", 0, "tools.praat"	menu	Adds "EML Tools" to the Praat menu in the Objects window.	modern menu, depth 0, Praat menu
+Add menu command: "Objects", "Praat", "Sub Item", "", 1, "sub.praat"	menu	Adds "Sub Item" to the Praat menu in the Objects window, under "EML Tools".	modern menu, depth 1, under-clause
+    Add menu command: "Objects", "New", "Indented Cmd", "", 0, "indent.praat"	menu	Adds "Indented Cmd" to the New menu in the Objects window.	leading whitespace
+Add menu command... "Objects" "New" "Legacy Create" "" 0 legacy_create.praat	menu	Adds "Legacy Create" to the New menu in the Objects window.	legacy syntax, depth 0
+Add menu command... "Objects" "New" "Legacy Sub" "" 1 legacy_sub.praat	menu	Adds "Legacy Sub" to the New menu in the Objects window, under "Legacy Create".	legacy syntax, depth 1 under-clause, unquoted trailing args
+Add menu command: "Objects", "Praat", "Say ""Hello""", "", 0, "say.praat"	menu	Adds "Say "Hello"" to the Praat menu in the Objects window.	title containing doubled quotes
+Add menu command: "Objects", "Praat", dynamicTitle$, "", 0, "dynamic.praat"	computed		computed title (variable)
+Add action command: "Sound", 1, "", 0, "", 0, "Play Loud", "", 0, "play.praat"	action	Adds a "Play Loud" button that appears when you select a Sound.	action, one class, n=1
+Add action command: "Sound", 0, "", 0, "", 0, "Play Any", "", 0, "playany.praat"	action	Adds a "Play Any" button that appears when you select a Sound.	action, one class, n=0
+Add action command: "Sound", 1, "TextGrid", 1, "", 0, "Align", "", 0, "align.praat"	action	Adds a "Align" button that appears when you select a Sound and a TextGrid.	action, two classes, n=1 and n=1
+Add action command: "Sound", 2, "TextGrid", 1, "", 0, "Batch Align", "", 0, "batch.praat"	action	Adds a "Batch Align" button that appears when you select 2 Sound objects and a TextGrid.	action, two classes, n=2
+Add action command: "Sound", 1, "TextGrid", 2, "Pitch", 1, "Full Combo", "", 0, "combo.praat"	action	Adds a "Full Combo" button that appears when you select a Sound and 2 TextGrid objects and a Pitch.	action, three classes
+Add action command: "Sound", 1, "", 0, "", 0, computedButtonName$, "", 0, "dyn_action.praat"	computed		computed title (action)
+# this is a comment and should be ignored	ignored		comment line
+   # indented comment	ignored		indented comment line
+Add action command... "Sound" 1 "" 0 "" 0 "Legacy Button" "" 0 legacy_btn.praat	action	Adds a "Legacy Button" button that appears when you select a Sound.	legacy action syntax
+Add menu command: "Picture", "New", "Draw Something", "", 0, "draw.praat"	menu	Adds "Draw Something" to the New menu in the Picture window.	Picture window, depth 0
+Add menu command: "Picture", "New", "Draw Sub", "", 1, "drawsub.praat"	menu	Adds "Draw Sub" to the New menu in the Picture window, under "Draw Something".	Picture window, depth 1 under-clause
+Add action command: "TextGrid", 1, "", 0, "", 0, "Extract Interval", "", 1, "extract.praat"	action	Adds a "Extract Interval" button that appears when you select a TextGrid.	action depth argument ignored by the English
+Add menu command: "Objects", "Praat", "Batch Tools", "", 0, "batch_tools.praat"	menu	Adds "Batch Tools" to the Praat menu in the Objects window.	modern menu, depth 0
+Add menu command: "Objects", "Praat", "Batch Sub", "", 1, "batch_sub.praat"	menu	Adds "Batch Sub" to the Praat menu in the Objects window, under "Batch Tools".	modern menu, depth 1 under-clause
+# trailing comment	ignored		comment line
+Add menu command...   "Objects"   "New"   "Spacey Legacy"   ""   0   spacey.praat	menu	Adds "Spacey Legacy" to the New menu in the Objects window.	legacy syntax, extra whitespace between tokens
+Add menu command: "Objects" , "New" , "Comma Spaced" , "" , 0 , "comma.praat"	menu	Adds "Comma Spaced" to the New menu in the Objects window.	modern syntax, extra whitespace around commas
+Add action command: "Sound", 3, "", 0, "", 0, "Triple Select", "", 0, "triple.praat"	action	Adds a "Triple Select" button that appears when you select 3 Sound objects.	action, n=3 (plural wording)
+Add action command: "Intensity", 1, "", 0, "", 0, "View Intensity", "", 0, "view_intensity.praat"	action	Adds a "View Intensity" button that appears when you select an Intensity.	AMENDED: an-article before a vowel-initial class
+Add menu commands: "Objects", "Praat", "Not A Registration", "", 0, "notreg.praat"	ignored		AMENDED: delimiter false positive -- "commands:" is not "command:" or "command..."
+Add menu command: windowVar$, "Praat", "Fixed Title", "", 0, "winvar.praat"	computed		AMENDED rule 4: non-literal window argument -- computed even though the title is literal

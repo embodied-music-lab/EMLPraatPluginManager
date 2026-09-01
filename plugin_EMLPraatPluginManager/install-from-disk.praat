@@ -35,6 +35,12 @@ emlManager_archiveName$ = "eml_pm_archive"
 emlManager_resultsName$ = "found_plugins.txt"
 emlManager_pageSize = 12
 
+# Canon wrap width for every pause-dialog wrap call site in the plugin
+# (this file and remove-plugin.praat). 78 overflowed Praat's pause
+# window in its proportional font (measured in the GUI drive); 62 is
+# the width the install file's own dialog was pinned at.
+emlManager_wrapWidth = 62
+
 emlManager_floorVersion = 6630
 emlManager_floorVersionLabel$ = "6.6.30"
 
@@ -89,6 +95,19 @@ emlManager_annotConfirmed$ = "name confirmed by the plugin's own scripts"
 emlManager_annotKeepsName$ = "keeps its folder name -- the plugin's scripts reference it"
 emlManager_annotRenamedFrom$ = "renamed from "
 emlManager_annotGuessed$ = "name guessed from folder "
+
+# Item 5: installed-command report (emlManagerParseSetupCommands and its
+# Installation-complete dialog integration -- see below).
+emlManager_rptCmdMenu$ = "Add menu command"
+emlManager_rptCmdAction$ = "Add action command"
+emlManager_rptVowels$ = "AEIOU"
+emlManager_rptNoCommands$ = "Adds no menu commands or buttons (files only)."
+emlManager_rptComputedPrefix$ = "Plus "
+emlManager_rptComputedSuffix$ = " command(s) named when the plugin loads."
+emlManager_rptHeaderSuffix$ = " adds:"
+emlManager_titleComplete$ = "Installation complete"
+emlManager_msgOk$ = "OK"
+emlManager_msgNext$ = "Next"
 
 # ============================================================================
 # Work procedures
@@ -184,9 +203,13 @@ procedure emlManagerReadVersion: .folder$
 endproc
 
 # ----------------------------------------------------------------------------
-# Item 3 difference probe. Recursively lists every file under .root$, as paths
-# relative to .root$, and returns them SORTED. Excludes __MACOSX subtrees.
-# .scratchFile$ is scratch space (overwritten); it never needs to survive.
+# Item 3 difference probe (also the shared recursive tree walk -- the ONE
+# BFS every caller needing files, folders, or both reuses; never
+# reimplemented). Recursively lists every file AND every subfolder under
+# .root$, as paths relative to .root$ (the root itself is not included among
+# .folders$#), each returned SORTED. Excludes __MACOSX subtrees.
+# .scratchFile$ is scratch space for the file list (overwritten); it never
+# needs to survive. The folder list is small enough to keep in memory.
 procedure emlManagerListRelFiles: .root$, .scratchFile$
     writeFile: .scratchFile$, ""
     .rootLen = length (.root$)
@@ -195,6 +218,9 @@ procedure emlManagerListRelFiles: .root$, .scratchFile$
     .head = 1
     .tail = 1
     .q$# [1] = .root$
+    .folderCap = 64
+    .rawFolders$# = empty$# (.folderCap)
+    .folderN = 0
     while .head <= .tail
         .cur$ = .q$# [.head]
         .head = .head + 1
@@ -210,6 +236,22 @@ procedure emlManagerListRelFiles: .root$, .scratchFile$
         .subs$# = folderNames$# (.cur$ + "/*")
         for .si from 1 to size (.subs$#)
             if .subs$# [.si] <> emlManager_macosxExclude$
+                .subPath$ = .cur$ + "/" + .subs$# [.si]
+                .relFolder$ = right$ (.subPath$, length (.subPath$) - .rootLen)
+                if startsWith (.relFolder$, "/") or startsWith (.relFolder$, "\")
+                    .relFolder$ = right$ (.relFolder$, length (.relFolder$) - 1)
+                endif
+                if .folderN >= .folderCap
+                    .newFolderCap = .folderCap * 2
+                    .newRawFolders$# = empty$# (.newFolderCap)
+                    for .fk from 1 to .folderN
+                        .newRawFolders$# [.fk] = .rawFolders$# [.fk]
+                    endfor
+                    .rawFolders$# = .newRawFolders$#
+                    .folderCap = .newFolderCap
+                endif
+                .folderN = .folderN + 1
+                .rawFolders$# [.folderN] = .relFolder$
                 if .tail >= .cap
                     .newCap = .cap * 2
                     .newQ$# = empty$# (.newCap)
@@ -223,7 +265,7 @@ procedure emlManagerListRelFiles: .root$, .scratchFile$
                     .cap = .newCap
                 endif
                 .tail = .tail + 1
-                .q$# [.tail] = .cur$ + "/" + .subs$# [.si]
+                .q$# [.tail] = .subPath$
             endif
         endfor
     endwhile
@@ -232,6 +274,15 @@ procedure emlManagerListRelFiles: .root$, .scratchFile$
         .files$# = sort$# (.raw$#)
     else
         .files$# = empty$# (0)
+    endif
+    if .folderN > 0
+        .trimmedFolders$# = empty$# (.folderN)
+        for .ft from 1 to .folderN
+            .trimmedFolders$# [.ft] = .rawFolders$# [.ft]
+        endfor
+        .folders$# = sort$# (.trimmedFolders$#)
+    else
+        .folders$# = empty$# (0)
     endif
 endproc
 
@@ -790,7 +841,16 @@ endproc
 # ----------------------------------------------------------------------------
 # Boolean label + Praat-derived variable name for a proposed/literal name.
 # Mirrors Praat's own derivation (spaces -> underscores, first char lowercased)
-# so emlManagerReadSelections reads the right variable back.
+# so emlManagerReadSelections -- and any other indirect readback of a
+# pause-form boolean built from .derived$ -- reads the right variable back.
+# GATE READBACK (measured, from the failed drive): Praat lowercases the
+# FIRST character when it turns a field label into a pause-form variable
+# name. .label$ (the text shown to the user) is NOT touched -- only
+# .derived$ (the variable name) is lowercased, here, once, as the canon;
+# every caller that derives a variable name goes through this procedure, so
+# fixing it here fixes every reader in one place (checked: no caller
+# depended on the unlowered form -- see the callers list at the bottom of
+# this comment).
 procedure emlManagerDeriveLabel: .name$
     .san$ = replace_regex$ (.name$, "[^A-Za-z0-9_]", " ", 0)
     while startsWith (.san$, " ")
@@ -801,6 +861,7 @@ procedure emlManagerDeriveLabel: .name$
     endwhile
     .label$ = .san$
     .derived$ = replace$ (.san$, " ", "_", 0)
+    .derived$ = replace_regex$ (.derived$, "^.", "\L&", 0)
 endproc
 
 # ----------------------------------------------------------------------------
@@ -988,6 +1049,311 @@ procedure emlManagerBaseName: .path$
     else
         .name$ = .clean$
     endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5. One argument token starting at .pos in .s$: skips leading spaces,
+# tabs and commas (the separators between arguments in both the comma-heavy
+# modern syntax and the whitespace-only legacy syntax), then reads either a
+# quoted string (doubled "" unescaped to a literal ") or a bare token running
+# to the next space/tab/comma. The token's own value is trimmed of leading
+# and trailing whitespace -- a quoted title of a single space collapses to
+# an empty title, matching a real plugin's setup.praat (regression fixture).
+# Output: .found (0 at end of string), .quoted (1 = came from a "..." span),
+# .value$, .nextPos (pass back in as .pos for the following token).
+procedure emlManagerRptNextToken: .s$, .pos
+    .len = length (.s$)
+    .p = .pos
+    while .p <= .len and (mid$ (.s$, .p, 1) = " " or mid$ (.s$, .p, 1) = tab$
+        ... or mid$ (.s$, .p, 1) = ",")
+        .p = .p + 1
+    endwhile
+    if .p > .len
+        .found = 0
+        .quoted = 0
+        .value$ = ""
+        .nextPos = .p
+    else
+        .c$ = mid$ (.s$, .p, 1)
+        if .c$ = """"
+            .p = .p + 1
+            .value$ = ""
+            .closed = 0
+            while .closed = 0 and .p <= .len
+                .ch$ = mid$ (.s$, .p, 1)
+                if .ch$ = """" and .p < .len and mid$ (.s$, .p + 1, 1) = """"
+                    .value$ = .value$ + """"
+                    .p = .p + 2
+                elsif .ch$ = """"
+                    .closed = 1
+                    .p = .p + 1
+                else
+                    .value$ = .value$ + .ch$
+                    .p = .p + 1
+                endif
+            endwhile
+            .found = 1
+            .quoted = 1
+        else
+            .value$ = ""
+            while .p <= .len and mid$ (.s$, .p, 1) <> " "
+                ... and mid$ (.s$, .p, 1) <> tab$ and mid$ (.s$, .p, 1) <> ","
+                .value$ = .value$ + mid$ (.s$, .p, 1)
+                .p = .p + 1
+            endwhile
+            .found = 1
+            .quoted = 0
+        endif
+        .nextPos = .p
+        while length (.value$) > 0
+            ... and (left$ (.value$, 1) = " " or left$ (.value$, 1) = tab$)
+            .value$ = right$ (.value$, length (.value$) - 1)
+        endwhile
+        while length (.value$) > 0
+            ... and (right$ (.value$, 1) = " " or right$ (.value$, 1) = tab$)
+            .value$ = left$ (.value$, length (.value$) - 1)
+        endwhile
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5. Reads up to .wanted argument tokens from .s$, which is the tail of
+# a registration line right after the literal "Add menu/action command" --
+# still carrying its ":" (modern) or "..." (legacy) marker, stripped here
+# before tokenizing with emlManagerRptNextToken. .n is the number actually
+# found (< .wanted on a malformed/short line).
+procedure emlManagerRptTokens: .s$, .wanted
+    .rest$ = .s$
+    if startsWith (.rest$, ":")
+        .rest$ = right$ (.rest$, length (.rest$) - 1)
+    elsif startsWith (.rest$, "...")
+        .rest$ = right$ (.rest$, length (.rest$) - 3)
+    endif
+    .value$# = empty$# (.wanted)
+    .quoted# = zero# (.wanted)
+    .n = 0
+    .pos = 1
+    .more = 1
+    while .n < .wanted and .more = 1
+        @emlManagerRptNextToken: .rest$, .pos
+        if emlManagerRptNextToken.found = 0
+            .more = 0
+        else
+            .n = .n + 1
+            .value$# [.n] = emlManagerRptNextToken.value$
+            .quoted# [.n] = emlManagerRptNextToken.quoted
+            .pos = emlManagerRptNextToken.nextPos
+        endif
+    endwhile
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5, rule 3. "a "/"an " for a class name, amended: "an" before a class
+# starting with A, E, I, O, or U.
+procedure emlManagerRptArticle: .class$
+    .article$ = "a "
+    if length (.class$) > 0
+        ... and index (emlManager_rptVowels$, left$ (.class$, 1)) > 0
+        .article$ = "an "
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5, rule 3. The "<sel>" clause: each non-empty class, in order, as
+# "a/an <class>" (n = 0 or 1) or "<n> <class> objects" (n >= 2), joined with
+# " and ".
+procedure emlManagerRptSelPhrase: .c1$, .n1, .c2$, .n2, .c3$, .n3
+    .classes$# = { .c1$, .c2$, .c3$ }
+    .counts# = { .n1, .n2, .n3 }
+    .sel$ = ""
+    for .i from 1 to 3
+        .cls$ = .classes$# [.i]
+        if .cls$ <> ""
+            .cnt = .counts# [.i]
+            if .cnt = 0 or .cnt = 1
+                @emlManagerRptArticle: .cls$
+                .phrase$ = emlManagerRptArticle.article$ + .cls$
+            else
+                .phrase$ = string$ (.cnt) + " " + .cls$ + " objects"
+            endif
+            if .sel$ = ""
+                .sel$ = .phrase$
+            else
+                .sel$ = .sel$ + " and " + .phrase$
+            endif
+        endif
+    endfor
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5, rules 2-4. Parses one already-joined logical line (a full
+# statement, continuation lines already concatenated). .depthTitle$#/
+# .depthKnown# is the per-depth title stack in progress (index = depth + 1);
+# a menu command with a literal title updates its own depth's entry so a
+# later, deeper command can look up its parent. Output: .isReg, .kind$
+# ("menu" | "action" | "computed"), .text$ (empty for "computed"), and the
+# (possibly updated) .depthTitle$#/.depthKnown# to copy back into the caller.
+procedure emlManagerRptProcessLogicalLine: .line$, .depthTitle$#, .depthKnown#, .maxDepth
+    .isReg = 0
+    .kind$ = ""
+    .text$ = ""
+    if startsWith (.line$, emlManager_rptCmdMenu$)
+        .rest$ = right$ (.line$, length (.line$) - length (emlManager_rptCmdMenu$))
+        # AMENDED rule 1: the keyword alone is not enough -- the modern ":"
+        # or the legacy "..." must follow IMMEDIATELY, or this is not a
+        # registration at all (e.g. "Add menu commands: ..." is prose).
+        if startsWith (.rest$, ":") or startsWith (.rest$, "...")
+            @emlManagerRptTokens: .rest$, 6
+            if emlManagerRptTokens.n = 6
+                .isReg = 1
+                .windowQuoted = emlManagerRptTokens.quoted# [1]
+                .windowVal$ = emlManagerRptTokens.value$# [1]
+                .menuQuoted = emlManagerRptTokens.quoted# [2]
+                .menuVal$ = emlManagerRptTokens.value$# [2]
+                .titleQuoted = emlManagerRptTokens.quoted# [3]
+                .titleVal$ = emlManagerRptTokens.value$# [3]
+                .depthVal = round (number (emlManagerRptTokens.value$# [5]))
+                # AMENDED rule 4: window and menu count too -- a variable
+                # name must never leak into the English, not just the title.
+                if .titleQuoted = 0 or .windowQuoted = 0 or .menuQuoted = 0
+                    .kind$ = "computed"
+                else
+                    .kind$ = "menu"
+                    .text$ = "Adds """ + .titleVal$ + """ to the " + .menuVal$
+                        ... + " menu in the " + .windowVal$ + " window"
+                    .haveParent = 0
+                    if .depthVal > 0 and .depthVal <= .maxDepth
+                        if .depthKnown# [.depthVal] = 1
+                            .haveParent = 1
+                        endif
+                    endif
+                    if .haveParent = 1
+                        .text$ = .text$ + ", under """
+                            ... + .depthTitle$# [.depthVal] + """."
+                    else
+                        .text$ = .text$ + "."
+                    endif
+                    if .depthVal >= 0 and .depthVal <= .maxDepth
+                        .depthTitle$# [.depthVal + 1] = .titleVal$
+                        .depthKnown# [.depthVal + 1] = 1
+                    endif
+                endif
+            endif
+        endif
+    elsif startsWith (.line$, emlManager_rptCmdAction$)
+        .rest$ = right$ (.line$, length (.line$) - length (emlManager_rptCmdAction$))
+        # AMENDED rule 1: same immediate-delimiter requirement as menu commands.
+        if startsWith (.rest$, ":") or startsWith (.rest$, "...")
+            @emlManagerRptTokens: .rest$, 10
+            if emlManagerRptTokens.n = 10
+                .isReg = 1
+                .c1$ = emlManagerRptTokens.value$# [1]
+                .n1 = round (number (emlManagerRptTokens.value$# [2]))
+                .c2$ = emlManagerRptTokens.value$# [3]
+                .n2 = round (number (emlManagerRptTokens.value$# [4]))
+                .c3$ = emlManagerRptTokens.value$# [5]
+                .n3 = round (number (emlManagerRptTokens.value$# [6]))
+                .titleQuoted = emlManagerRptTokens.quoted# [7]
+                .titleVal$ = emlManagerRptTokens.value$# [7]
+                if .titleQuoted = 0
+                    .kind$ = "computed"
+                else
+                    .kind$ = "action"
+                    @emlManagerRptSelPhrase: .c1$, .n1, .c2$, .n2, .c3$, .n3
+                    .text$ = "Adds a """ + .titleVal$
+                        ... + """ button that appears when you select "
+                        ... + emlManagerRptSelPhrase.sel$ + "."
+                endif
+            endif
+        endif
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 5. Parses one installed plugin's setup.praat -- the only file Praat
+# reads to register commands -- into a report of what it adds (rules 1-6 of
+# the installed-command-report spec). Continuation lines ("..." at the start
+# of a line) are joined into the logical line they continue before parsing,
+# matching real Praat script syntax (regression fixture: AERoPlot). Reads
+# only the named file; anything it includes or runs is not followed.
+# Input: .path$ (absolute path to a setup.praat, or one that does not exist
+# -- treated the same as an empty one, rule 5). Output: .n result rows in
+# parallel .kind$# ("menu" | "action" | "computed") and .text$# (the
+# finished, unwrapped English line -- the caller wraps it for display).
+procedure emlManagerParseSetupCommands: .path$
+    if fileReadable (.path$)
+        .rawLines$# = readLinesFromFile$# (.path$)
+    else
+        .rawLines$# = empty$# (0)
+    endif
+    .nRaw = size (.rawLines$#)
+    .cap = .nRaw + 2
+    .kind$# = empty$# (.cap)
+    .text$# = empty$# (.cap)
+    .n = 0
+    .computedCount = 0
+
+    .maxDepth = 32
+    .depthTitle$# = empty$# (.maxDepth + 1)
+    .depthKnown# = zero# (.maxDepth + 1)
+
+    .logical$ = ""
+    for .j from 1 to .nRaw
+        .ln$ = .rawLines$# [.j]
+        while length (.ln$) > 0 and (left$ (.ln$, 1) = " " or left$ (.ln$, 1) = tab$)
+            .ln$ = right$ (.ln$, length (.ln$) - 1)
+        endwhile
+        if startsWith (.ln$, "...")
+            .logical$ = .logical$ + " " + right$ (.ln$, length (.ln$) - 3)
+        else
+            if .logical$ <> ""
+                @emlManagerRptProcessLogicalLine: .logical$, .depthTitle$#, .depthKnown#, .maxDepth
+                .depthTitle$# = emlManagerRptProcessLogicalLine.depthTitle$#
+                .depthKnown# = emlManagerRptProcessLogicalLine.depthKnown#
+                if emlManagerRptProcessLogicalLine.isReg = 1
+                    .n = .n + 1
+                    .kind$# [.n] = emlManagerRptProcessLogicalLine.kind$
+                    .text$# [.n] = emlManagerRptProcessLogicalLine.text$
+                    if emlManagerRptProcessLogicalLine.kind$ = "computed"
+                        .computedCount = .computedCount + 1
+                    endif
+                endif
+            endif
+            .logical$ = .ln$
+        endif
+    endfor
+    if .logical$ <> ""
+        @emlManagerRptProcessLogicalLine: .logical$, .depthTitle$#, .depthKnown#, .maxDepth
+        if emlManagerRptProcessLogicalLine.isReg = 1
+            .n = .n + 1
+            .kind$# [.n] = emlManagerRptProcessLogicalLine.kind$
+            .text$# [.n] = emlManagerRptProcessLogicalLine.text$
+            if emlManagerRptProcessLogicalLine.kind$ = "computed"
+                .computedCount = .computedCount + 1
+            endif
+        endif
+    endif
+
+    if .n = 0
+        .n = 1
+        .kind$# [1] = ""
+        .text$# [1] = emlManager_rptNoCommands$
+    elsif .computedCount > 0
+        .n = .n + 1
+        .kind$# [.n] = ""
+        .text$# [.n] = emlManager_rptComputedPrefix$ + string$ (.computedCount)
+            ... + emlManager_rptComputedSuffix$
+    endif
+
+    # Trim the over-allocated vectors down to exactly the rows produced.
+    .trimmedKind$# = empty$# (.n)
+    .trimmedText$# = empty$# (.n)
+    for .ti from 1 to .n
+        .trimmedKind$# [.ti] = .kind$# [.ti]
+        .trimmedText$# [.ti] = .text$# [.ti]
+    endfor
+    .kind$# = .trimmedKind$#
+    .text$# = .trimmedText$#
 endproc
 
 # ============================================================================
@@ -1302,7 +1668,7 @@ if not variableExists ("emlManager_harnessMode")
                 # Item 4: pre-wrap at word boundaries into its own comment
                 # widgets, so a long description never renders under the
                 # following checkbox.
-                @emlManagerWrapText: descLines$# [iShow], 78
+                @emlManagerWrapText: descLines$# [iShow], emlManager_wrapWidth
                 for iWrapLine from 1 to size (emlManagerWrapText.lines$#)
                     comment: emlManagerWrapText.lines$# [iWrapLine]
                 endfor
@@ -1372,6 +1738,12 @@ if not variableExists ("emlManager_harnessMode")
     # --- Install loop ---
 
     summaryLines$# = empty$# (nSelected)
+    # Item 5: parallel to summaryLines$# -- which rows get an installed-
+    # command report (only actual successful installs with a setup.praat)
+    # and where to read it from.
+    reportShow# = zero# (nSelected)
+    reportFolder$# = empty$# (nSelected)
+    reportPath$# = empty$# (nSelected)
     summaryIdx = 0
     createFolder: archiveDir$
 
@@ -1411,6 +1783,10 @@ if not variableExists ("emlManager_harnessMode")
                         line$ = line$ + emlManager_msgArchiveNote$
                     endif
                     summaryLines$# [summaryIdx] = line$
+                    reportShow# [summaryIdx] = 1
+                    reportFolder$# [summaryIdx] = instName$
+                    reportPath$# [summaryIdx] = prefsDir$ + "/" + instName$
+                        ... + "/" + emlManager_setupFile$
                 endif
             endif
         endif
@@ -1420,12 +1796,76 @@ if not variableExists ("emlManager_harnessMode")
 
     @emlManagerCleanupStaging: stagingPath$
 
-    beginPause: "Installation complete"
-        for iSummary from 1 to summaryIdx
-            comment: summaryLines$# [iSummary]
-        endfor
-        comment: ""
-        comment: emlManager_msgRestart$
-    endPause: "OK", 1, 0
+    # Item 5: one pass to size the flattened comment-line list (each
+    # installed plugin's existing summary line, then -- when it was actually
+    # installed -- its "<folder> adds:" header and its wrapped report lines),
+    # a second pass to fill it, then display it through the existing
+    # pagination-at-12 machinery.
+    totalLines = 0
+    for iSummary from 1 to summaryIdx
+        totalLines = totalLines + 1
+        if reportShow# [iSummary] = 1
+            totalLines = totalLines + 1
+            @emlManagerParseSetupCommands: reportPath$# [iSummary]
+            for iRep from 1 to emlManagerParseSetupCommands.n
+                # AMENDED dialog integration: a computed row's text is empty
+                # -- it is not rendered as a blank comment field; only its
+                # tally line (which has real text) is.
+                if emlManagerParseSetupCommands.text$# [iRep] <> ""
+                    @emlManagerWrapText: emlManagerParseSetupCommands.text$# [iRep], emlManager_wrapWidth
+                    totalLines = totalLines + size (emlManagerWrapText.lines$#)
+                endif
+            endfor
+        endif
+    endfor
+    totalLines = totalLines + 2
+
+    allLines$# = empty$# (totalLines)
+    lineIdx = 0
+    for iSummary from 1 to summaryIdx
+        lineIdx = lineIdx + 1
+        allLines$# [lineIdx] = summaryLines$# [iSummary]
+        if reportShow# [iSummary] = 1
+            lineIdx = lineIdx + 1
+            allLines$# [lineIdx] = reportFolder$# [iSummary] + emlManager_rptHeaderSuffix$
+            @emlManagerParseSetupCommands: reportPath$# [iSummary]
+            for iRep from 1 to emlManagerParseSetupCommands.n
+                if emlManagerParseSetupCommands.text$# [iRep] <> ""
+                    @emlManagerWrapText: emlManagerParseSetupCommands.text$# [iRep], emlManager_wrapWidth
+                    for iWrap from 1 to size (emlManagerWrapText.lines$#)
+                        lineIdx = lineIdx + 1
+                        allLines$# [lineIdx] = emlManagerWrapText.lines$# [iWrap]
+                    endfor
+                endif
+            endfor
+        endif
+    endfor
+    lineIdx = lineIdx + 1
+    allLines$# [lineIdx] = ""
+    lineIdx = lineIdx + 1
+    allLines$# [lineIdx] = emlManager_msgRestart$
+
+    nCompletePages = ceiling (totalLines / emlManager_pageSize)
+    for iCPage from 1 to nCompletePages
+        cPageStart = (iCPage - 1) * emlManager_pageSize + 1
+        cPageEnd = min (iCPage * emlManager_pageSize, totalLines)
+
+        if nCompletePages = 1
+            cPageTitle$ = emlManager_titleComplete$
+        else
+            cPageTitle$ = emlManager_titleComplete$ + " (page "
+                ... + string$ (iCPage) + " of " + string$ (nCompletePages) + ")"
+        endif
+
+        beginPause: cPageTitle$
+            for iCShow from cPageStart to cPageEnd
+                comment: allLines$# [iCShow]
+            endfor
+        if iCPage < nCompletePages
+            endPause: emlManager_msgNext$, 1, 0
+        else
+            endPause: emlManager_msgOk$, 1, 0
+        endif
+    endfor
 
 endif

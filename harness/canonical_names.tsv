@@ -1,0 +1,24 @@
+plugin_tgutils-master	1	none	plugin_tgutils	row	branch word
+plugin_X-main	1	none	plugin_X	row	branch word
+plugin_X-develop	1	none	plugin_X	row	branch word
+plugin_X-1.2.0	1	none	plugin_X	row	version, v stripped by GitHub
+plugin_X-v1.2.0	1	none	plugin_X	row	version, GitLab keeps v
+plugin_X-2	1	none	plugin_X	row	bare numeric version
+plugin_X-a1b2c3d	1	none	plugin_X	row	7-hex sha
+plugin_X-0123456789abcdef0123456789abcdef01234567	1	none	plugin_X	row	40-hex sha
+plugin_X copy	1	none	plugin_X	row	macOS copy
+plugin_X (2)	1	none	plugin_X	row	browser duplicate
+plugin_X-main (1)	1	none	plugin_X	row	two iterations
+plugin_dev	1	none	plugin_dev	row	guard: suffix IS stem
+plugin_master	1	none	plugin_master	row	guard: suffix IS stem
+plugin_2	1	none	plugin_2	row	guard: suffix IS stem
+plugin_praat7-main	1	none	plugin_praat7	row	digit in stem survives
+plugin_X_v2	1	literal	plugin_X_v2	row	author-versioned, content cancels
+plugin_X_v2	1	literal_external	plugin_X	row	same-named EXTERNAL ref, discarded
+plugin_X_v2	1	none	plugin_X	row	no self-reference, heuristic stands
+plugin_utils-master	1	proposal_external	plugin_utils	row	fork; external ref discarded
+plugin_utils	1	none	plugin_utils	row	clean name untouched
+owner-plugin_X-a1b2c3d	1	none	plugin_X	row_unchecked	near-miss, setup present, unconfirmed
+owner-plugin_X-a1b2c3d	1	proposal	plugin_X	row	near-miss, content-confirmed
+my_plugin_backup	0	none	plugin_backup	dropped	near-miss, no setup, no confirmation
+jjatria-plugin_utils-1a2b3c4	1	none	plugin_utils	row_unchecked	Zenodo/Bitbucket shape

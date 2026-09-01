@@ -88,3 +88,42 @@ works but leaves a noncanonical name in the preferences folder.
 Whether the installer should offer to strip `-master`/`-main`
 style suffixes is an open design question, deliberately not
 decided in code.
+
+## v4.1 — canonical-name proposals (1 September 2026)
+
+The canonical-name revision (spec:
+`planning/PRAATGEN_ASK_CANONICAL_NAMES_2026-08-31.md`) landed as
+v4.1 and is fully verified: the 24-row normative table plus the
+double-zip fixture pass through the real `emlpmL_canonicalName`
+procedure (25/25, re-run independently against this repo layout —
+`harness/run_canonical_names.praat`); all 17 prior headless cases
+re-driven green against the new file via its library-mode flag
+(`emlpm_harnessMode`); and six GUI cases pass with screenshots:
+the real `plugin_tgutils-master` installing as `plugin_tgutils`
+with the content-confirmed annotation, the literal-names toggle
+preserving the found name, the two-proposal collision refusing
+before the dialog, the near-miss `owner-plugin_Nm-sha` appearing
+unchecked with its guessed name and installing as `plugin_Nm` when
+checked, and the multi-plugin and nested regressions unchanged.
+
+Accepted deviations from the spec, adjudicated: the §6 ancestor
+collapse lives in the main sequence (a pairwise operation cannot
+be a per-name pure function); the §5 1 MB scan cap is dropped
+(Praat has no file-size primitive, so a cap would cost the read it
+avoids); exit buttons read "Quit" per the project's house rule.
+Exit-path buttons in the bootstrap should adopt the same rule at
+its next revision.
+
+Known cosmetic defect, open: in the selection dialog, a
+description comment that wraps to a second line renders under the
+row's checkbox and label (see `evidence/G1_dialog2_selection.png`).
+Clicking is unaffected. Needs a layout pass — shorter annotations
+or a spacer line.
+
+Environment facts added: Praat 7.0.x refuses file writes under
+`--run` without `--FULL-TRUST` (headless automation on 7 needs the
+flag; interactive GUI use is unaffected). In this sandbox, the GUI
+binary crashes when launched as `--run` with a script
+(GtkStyleContext); the working path is opening the script editor
+and driving Run by click. Praat's single-instance lock survives
+kill -9; restart the display stack between GUI cases.

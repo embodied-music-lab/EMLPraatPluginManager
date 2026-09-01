@@ -5,15 +5,38 @@
 ## For users
 
 **What is this?**
-A plugin that installs, updates, and removes other Praat plugins
-from a menu inside Praat. You never locate the preferences folder,
-never unzip anything by hand, and never copy folders.
+A plugin that installs and removes other Praat plugins from a menu
+inside Praat, and tells you where each installed plugin's commands
+end up. You never locate the preferences folder, never unzip
+anything by hand, and never copy folders.
 
 **How do I install the manager itself?**
-Download one `.praat` file, open it in Praat, and click Run. It
-installs itself, lets you pick plugins in the same sitting, and asks
-you to restart Praat once. That restart is the only one you need,
-however many plugins you chose.
+Download `eml-plugin-manager-install.praat` from the repository,
+open it in Praat, and click Run. It installs itself and asks you to
+restart Praat once. After restarting, install plugins with the
+manager's own "Install plugin from disk..." command.
+
+**How do I know where a plugin's commands ended up?**
+After every install, the "Installation complete" dialog lists, for
+each plugin, exactly what it added: which menu each command is in,
+what it's called, and, for a button that appears only when
+something is selected, what you need selected to see it. You don't
+have to go hunting through menus to find what you just installed.
+
+**How do I remove a plugin?**
+Use "EML Plugin Manager: Remove plugin..." from the Praat menu. Tick
+the plugin or plugins you want to remove from the checklist, then
+switch on "Archive and remove the plugins listed above" on the
+confirmation dialog and press the button — nothing is removed until
+you do that. The confirmation dialog also states exactly where each
+plugin will be archived and how many files and folders it holds.
+
+**Where do removed plugins go?**
+Into the archive folder inside your Praat preferences folder
+(`eml_pm_archive`), under a name that includes the plugin's version.
+Nothing is deleted without an archived copy: the plugin is copied
+there first, and that copy's complete file list is checked against
+the original before the original is deleted.
 
 **Why does Praat ask me for permission?**
 Praat 7 asks before any script writes files or runs system commands,
@@ -25,34 +48,40 @@ prompt per sitting at most. Nothing runs at startup that needs
 permission.
 
 **Does it phone home? What does it send?**
-Nothing, to nobody. The manager contacts the network only when you
-use it, only to fetch the catalog file and download the plugins you
-selected, and it reports nothing anywhere. There are no accounts, no
-telemetry, and no tracking. The update indicator you see at launch
-comes from a local file written during your last session, not from
-a network call.
+Nothing, to nobody. The manager never touches the network. Install
+plugin from disk works on a zip, tar.gz, or folder you already have
+on your computer, and it reports nothing anywhere. There are no
+accounts, no telemetry, and no tracking.
 
 **Is it safe?**
-Every download is verified against a checksum published in the
-catalog before it is unpacked; a corrupted or tampered file is
-refused and deleted, and nothing is installed. Nothing the manager
-downloads is ever executed during install — archives are data, and
+After the manager places a plugin, it confirms the plugin landed
+correctly before telling you the install succeeded. Removing a
+plugin copies it to the archive folder first and checks that copy's
+complete file list against the original before deleting anything —
+if the copy doesn't match, nothing is deleted. Nothing the manager
+installs is ever executed during install — archives are data, and
 what they contain only runs as a Praat plugin after you installed
 it, which is the same trust decision installing any plugin has
 always been. The manager itself needs no administrator rights and
 installs nothing outside Praat's own preferences area.
 
-**What happens to my settings when I update or remove a plugin?**
-They survive. Updates preserve your settings and saved files
-automatically. "Remove" keeps the plugin in a local archive — with
-its settings — so you can restore it later; permanently deleting
-archived plugins is a separate, explicit command that shows you
-exactly what it is about to delete.
+**What happens to my settings when I remove a plugin, or install a
+newer version over an old one?**
+Nothing is deleted without an archived copy first. Removing a
+plugin copies the whole folder — including any settings it kept
+inside it — to the archive folder, verifies the copy, and only then
+deletes the original. Installing a plugin that is already installed
+works the same way: the current copy is archived before the new one
+is put in its place. Settings a plugin keeps outside its own folder,
+in Praat's preferences area, are never touched by either operation.
 
 **A plugin update broke my workflow mid-project. Now what?**
-Every update automatically keeps the previous version in the
-archive. Restore it from the manager and restart; you are back
-where you were.
+Look in the archive folder (`eml_pm_archive`, inside your Praat
+preferences folder) for the version you just replaced — installing
+over an existing plugin archives it first, so it's there. Copy it
+back into your preferences folder in place of the new version and
+restart Praat. Doing this from inside the manager, without leaving
+Praat, is planned but not built yet.
 
 **Can I move my setup to another computer?**
 Yes (planned feature): Export setup writes one file holding your
@@ -63,22 +92,28 @@ environment.
 
 **I installed some plugins by hand years ago. Does the manager
 touch them?**
-No. Hand-installed plugins show up as "installed, not in the
-catalog" and the manager never modifies or removes anything it did
-not install unless you explicitly ask.
+No, not unless you ask it to. Remove plugin lists every plugin
+folder in your preferences area, hand-installed ones included, but
+nothing is archived or deleted until you select a plugin and confirm
+on the removal dialog. Install plugin from disk only ever touches
+the plugin folder you're actively installing.
 
 **Which Praat versions does it support?**
-Praat 6.6.30 and later, including Praat 7. Each catalog entry also
-declares the lowest Praat version that plugin supports, and the
-manager refuses to install a plugin your Praat cannot run.
+Praat 6.6.30 and later, including Praat 7. The manager checks this
+itself and tells you plainly if your Praat is too old, rather than
+installing something it can't run.
 
 **What does it need besides Praat?**
-Nothing you have to install. The manager uses tools your operating
-system already ships (`curl` for downloads, `tar` for unpacking) on
-macOS, Windows 10 and later, and Linux. No Python, no Perl, no
-runtimes.
+Nothing. Install plugin from disk works on an archive or folder
+already on your computer, so there's nothing else to install — no
+Python, no Perl, no other runtime.
 
 ## For plugin developers
+
+The catalog and the publisher tool this section describes are
+planned but not built yet. Today, anyone can install your plugin
+with "Install plugin from disk..." from a zip, tar.gz, or folder you
+share directly — no listing required.
 
 **What do I have to do to list my plugin?**
 If it is already a plugin folder: add a one-line `VERSION` file, run

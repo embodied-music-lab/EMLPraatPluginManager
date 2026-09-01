@@ -5,6 +5,18 @@ supersedes `PLUGIN_MANAGER_DESIGN_2026-08-31.md`. The implementation
 handoff (`praatpluginmanagerhandoff.md`) remains the engineering
 companion; where the two differ, this document governs.
 
+## Status
+
+Version 0.6.2 is out. Installing a plugin from a downloaded zip,
+tar.gz, or folder (with recursive search, canonical-name offers, and
+version-aware collision handling); removing an installed plugin,
+which always archives it first; the report that tells you where a
+newly installed plugin's commands appear; and the one-file install
+script that sets up the manager itself are all built and working
+today. Everything else below — the catalog, update checks, and
+restoring a plugin from the archive — is the plan for later phases;
+see §13 for what has shipped against each phase.
+
 ## 1. What this is and what's at stake
 
 A plugin that installs, updates, archives, and removes Praat plugins
@@ -360,24 +372,32 @@ human who reviews exactly the cases the machines refuse.
 question already answered: Stats & Graphs config location (external;
 conformant).
 
-**Phase 1 — scaffold, one plugin end to end.** `VERSION` and
-manifest for Stats & Graphs; catalog repo with one live row; minimum
-publisher script (tar, checksum, row — twenty lines, manual is
-fine); a `0.9.x` test release exercising the whole pipeline; the
-manager at core-loop depth (catalog parse, download, verify, unpack,
-remove, version compare) driven by a test script, with the simplest
-install dialog. The kit lane's frozen release then hands the catalog
-its first real `1.0.0` row, and the manager becomes the install path
-the validation paper can name. The manager needs nothing from the
-kit; the dependency is one pleasant direction only.
+**Phase 1 — scaffold, one plugin end to end.** Shipped in v0.6.2,
+ahead of the catalog work this phase originally planned: installing
+from a zip, tar.gz, or folder already on disk, with the recursive
+search, canonical-name offers, and version-aware collision handling
+described in the README; removing an installed plugin; and the
+one-file install script. Still open: `VERSION` and manifest for
+Stats & Graphs; catalog repo with one live row; minimum publisher
+script (tar, checksum, row — twenty lines, manual is fine); a
+`0.9.x` test release exercising the whole pipeline; and installing
+by fetching from that catalog rather than from a file already on
+disk. The kit lane's frozen release then hands the catalog its first
+real `1.0.0` row, and the manager becomes the install path the
+validation paper can name. The manager needs nothing from the kit;
+the dependency is one pleasant direction only.
 
-**Phase 2 — the manager as a product.** Bootstrap generator; update
-notification (§6); archive and restore UI (§7); the full publisher
-tool with manifest generation and lint; adversarial verification per
-the handoff's stage 4 (fresh install, update over existing,
-corrupted checksum, unreachable catalog, version floor, removal,
-out-of-tree removal attempt), on all three platforms, with the
-Windows pass on real hardware.
+**Phase 2 — the manager as a product.** Shipped in v0.6.2: the
+bootstrap generator (the one-file install script, built by
+`tools/build_installer.py`) and the archive half of archive and
+restore (§7) — removing a plugin always archives it first. Still
+open: update notification (§6); the restore half of §7 (bringing an
+archived plugin back through the manager, rather than by hand); the
+full publisher tool with manifest generation and lint; and
+adversarial verification per the handoff's stage 4 (fresh install,
+update over existing, corrupted checksum, unreachable catalog,
+version floor, removal, out-of-tree removal attempt), on all three
+platforms, with the Windows pass on real hardware.
 
 **Phase 3 — community launch.** Spec published; catalog moved to the
 neutral org with CI, the ownership and provenance checks (§12), and

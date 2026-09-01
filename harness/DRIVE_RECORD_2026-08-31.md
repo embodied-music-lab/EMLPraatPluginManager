@@ -152,3 +152,46 @@ future touch may tighten to ~70. New measured 6.6.30 facts:
 `sort$#` works on string vectors; string comparison is
 lexicographic ASCII; `fileNames$#`/`folderNames$#` return sorted
 results; `readFile$` preserves exact bytes.
+
+## Measured facts, 2026-09-01 rounds (v0.6.0-v0.6.2)
+
+Consolidated from code comments and specifications, extracted as
+present-tense rules (measured at Praat 6.6.30 unless otherwise noted):
+
+- Pause-window comment fields do not wrap on their own; multiple lines
+  must be emitted as separate comment widgets.
+- Boolean checkbox labels clip at ~38 characters on macOS and never
+  wrap or autosize; capping is a hard invariant enforced at every label
+  construction site.
+- Praat lowercases the first character when deriving a pause-form
+  variable name from a field label; the derived variable name differs
+  from the displayed label text in this one transformation.
+- A derived variable name must not start with a digit; reading such a
+  widget back through indirect substitution (`.varname$`) triggers a
+  parse error ("Unknown symbol") rather than failing gracefully.
+- `include` resolves every directive — including nested includes —
+  relative to the OUTERMOST running script's folder, not the file
+  containing the include line.
+- `deleteFile` removes both files and empty folders; applying it to a
+  non-empty folder does not error, but leaves the folder in place.
+- `fileNames$#` and `folderNames$#` cannot enumerate dot-files (hidden
+  files on macOS and Unix), so inventories and delete walks cover only
+  visible entries while system commands like `cp -R` include them.
+- `filesAreIdentical` does not exist as a Praat procedure at 6.6.30.
+- `readFile$` and `writeFile` are not byte-safe for binary or non-ASCII
+  content; null bytes are dropped and UTF-16 switching occurs, making
+  in-Praat byte comparison impossible.
+- Concatenating a never-assigned element of an empty-initialized string
+  vector (even indirectly via assignment copy or procedure argument)
+  segfaults the interpreter; every vector element must be explicitly
+  written before use.
+- Praat's single-instance lock survives forceful termination (`kill -9`);
+  stale lock files must be manually removed before relaunching with a
+  reused preferences directory.
+- `cp -R source dest` nests source one level deeper when dest already
+  exists as a directory; clear a surviving destination folder before
+  placement.
+- GUI drives must launch Praat with an ABSOLUTE `--pref-dir` path; a
+  relative path corrupts staging paths built from it.
+- Enumerate windows via `_NET_CLIENT_LIST`; window titles use curly
+  quotes, so `xdotool search --name` with straight quotes misses them.

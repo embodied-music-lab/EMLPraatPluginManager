@@ -8,7 +8,13 @@
 #          original, and only then are the original files and folders
 #          deleted. Nothing is removed unless the user explicitly confirms.
 # Date: 1 September 2026
-# Version: 1.0
+# Version: 1.1
+#
+# 1.1 -- REVISED selection-label subsystem (sec. 2 of the UX round spec):
+#       emlManagerRemoveBuildLabel now takes each row's Dialog-1 listing
+#       index and prefixes the checkbox label with it (identity, sec. 2a);
+#       Dialog 2's full-name lines carry the same index so a shortened
+#       checkbox can always be resolved against its full folder name.
 #
 # ATTRIBUTION
 # Framework: EML PraatGen by Ian Howell
@@ -55,6 +61,11 @@ emlManagerRemove_msgGateOff$ = "Nothing was removed. To proceed, switch on '"
     ... + emlManagerRemove_gateLabel$ + "' and press the button again."
 
 emlManagerRemove_managerSuffix$ = " (this is the Plugin Manager itself)"
+
+# UX round 2026-09-01, item 1: the Dialog-1 label suffix for a plugin_*
+# folder that exists but is not installed (emlManagerIsInstalled = 0) -- a
+# ghost left behind by an earlier removal.
+emlManagerRemove_ghostSuffix$ = " (leftover folder; not an active plugin)"
 
 emlManagerRemove_msgAlways1$ = "The plugin is first copied to the archive with the same mechanism installs use."
 emlManagerRemove_msgAlways2$ = "The copy's complete file inventory is verified against the original before anything is deleted."
@@ -280,6 +291,33 @@ procedure emlManagerRemoveExecutePlugin: .folderName$, .destName$, .destPath$,
 endproc
 
 # ----------------------------------------------------------------------------
+# Items 1+2 (sec. 2 REVISED): Dialog-1 label for one plugin_* folder, at
+# listing position .index. Appends the manager suffix when .isOwnFolder = 1,
+# and (via the installed-test canon) the ghost suffix when the folder exists
+# but is not installed, then caps the combined label to .cap characters --
+# index prefix included -- before deriving the readback variable name. The
+# index prefix makes .derived$ unique by construction (sec. 2a); folder names
+# in one prefs directory are unique on their own too, so this needs no
+# duplicate guard (sec. 2d).
+procedure emlManagerRemoveBuildLabel: .folderName$, .isOwnFolder, .prefsDir$, .cap, .index
+    .suffix$ = ""
+    if .isOwnFolder = 1
+        .suffix$ = .suffix$ + emlManagerRemove_managerSuffix$
+    endif
+    @emlManagerIsInstalled: .prefsDir$ + "/" + .folderName$
+    .isGhost = 0
+    if emlManagerIsInstalled.installed = 0
+        .isGhost = 1
+        .suffix$ = .suffix$ + emlManagerRemove_ghostSuffix$
+    endif
+    @emlManagerIndexPrefix: .index
+    @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, .folderName$, .suffix$, .cap
+    @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+    .label$ = emlManagerDeriveLabel.label$
+    .derived$ = emlManagerDeriveLabel.derived$
+endproc
+
+# ----------------------------------------------------------------------------
 # Runs emlManagerRemoveExecutePlugin over .names$# in order, stopping at the
 # first plugin whose copy or verify step fails (so nothing after a failure
 # is touched). Does nothing at all unless .confirmed is 1 -- the gate
@@ -351,20 +389,29 @@ if not variableExists ("emlManagerRemove_harnessMode")
 
     boolLabels$# = empty$# (max (nAll, 1))
     derivedNames$# = empty$# (max (nAll, 1))
+    itemLines# = zero# (max (nAll, 1))
     for iName from 1 to nAll
-        displayLabel$ = allNames$# [iName]
+        isOwnFolder = 0
         if allNames$# [iName] = ownFolderName$
-            displayLabel$ = displayLabel$ + emlManagerRemove_managerSuffix$
+            isOwnFolder = 1
         endif
-        @emlManagerDeriveLabel: displayLabel$
-        boolLabels$# [iName] = emlManagerDeriveLabel.label$
-        derivedNames$# [iName] = emlManagerDeriveLabel.derived$
+        @emlManagerRemoveBuildLabel: allNames$# [iName], isOwnFolder, prefsDir$,
+            ... emlManager_boolLabelCap, iName
+        boolLabels$# [iName] = emlManagerRemoveBuildLabel.label$
+        derivedNames$# [iName] = emlManagerRemoveBuildLabel.derived$
+        itemLines# [iName] = 1
     endfor
 
-    nPages = ceiling (nAll / emlManager_pageSize)
+    # Item 3: line-budget pagination -- each row here is a single boolean
+    # with no description comment, so this is a plain checkbox list; the
+    # budget walk pages it at emlManager_pageLineBudget items per page.
+    @emlManagerPageBudgetWalk: itemLines#, nAll, emlManager_pageLineBudget, 0
+    nPages = emlManagerPageBudgetWalk.nPages
+    pageStartItem# = emlManagerPageBudgetWalk.pageStartItem#
+    pageEndItem# = emlManagerPageBudgetWalk.pageEndItem#
     for iPage from 1 to nPages
-        pageStart = (iPage - 1) * emlManager_pageSize + 1
-        pageEnd = min (iPage * emlManager_pageSize, nAll)
+        pageStart = pageStartItem# [iPage]
+        pageEnd = pageEndItem# [iPage]
         if nPages = 1
             pageTitle$ = emlManagerRemove_title1$
         else
@@ -402,12 +449,17 @@ if not variableExists ("emlManagerRemove_harnessMode")
         exitScript: emlManager_msgNoneSelected$
     endif
 
+    # Sec. 2a: selectedIndex# carries each selected plugin's Dialog-1 listing
+    # position, so Dialog 2 can prefix its full-name line with the SAME
+    # index the (possibly shortened) checkbox label used.
     selectedNames$# = empty$# (nSel)
+    selectedIndex# = zero# (nSel)
     kSel = 0
     for iCheck from 1 to nAll
         if selFlags# [iCheck] = 1
             kSel = kSel + 1
             selectedNames$# [kSel] = allNames$# [iCheck]
+            selectedIndex# [kSel] = iCheck
         endif
     endfor
 
@@ -438,7 +490,11 @@ if not variableExists ("emlManagerRemove_harnessMode")
     while gateOn = 0
         beginPause: emlManagerRemove_title2$
             for iShow2 from 1 to nSel
-                @emlManagerRemoveEmitWrapped: selectedNames$# [iShow2]
+                # Sec. 2a: FULL folder name, prefixed with the same index
+                # its (possibly shortened) Dialog-1 checkbox label used.
+                @emlManagerIndexDescPrefix: selectedIndex# [iShow2]
+                @emlManagerRemoveEmitWrapped: emlManagerIndexDescPrefix.prefix$
+                    ... + selectedNames$# [iShow2]
                 @emlManagerRemovePluralWord: fileCount# [iShow2],
                     ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
                 fileWord$ = emlManagerRemovePluralWord.word$

@@ -44,6 +44,17 @@ procedure emlHarnessBuildPlugin: .root$, .name$, .version$
     endif
 endproc
 
+# ----------------------------------------------------------------------------
+# Harness-only helper: .n repetitions of .ch$ concatenated (Praat has no
+# built-in string-repeat operator). Used to build synthetic over-length
+# names for Check 10's cap-invariant sweeps.
+procedure emlHarnessRepeatChar: .ch$, .n
+    .result$ = ""
+    for .i from 1 to .n
+        .result$ = .result$ + .ch$
+    endfor
+endproc
+
 # ============================================================================
 # Check 1: archive path construction -- with a version, without one
 # (no-version), and the __2 / __3 collision suffix.
@@ -533,6 +544,595 @@ if folderExists (check8Root$ + "/plugin_Unwritable")
 else
     fail = fail + 1
     appendInfoLine: "FAIL: the original plugin folder was removed despite the failed copy"
+endif
+
+# ============================================================================
+# UX round 2026-09-01, item 4: Check 9 -- the installed-test canon and ghost
+# semantics. A ghost fixture is a plugin_* folder containing ONLY a seeded
+# ".DS_Store", written by an explicit path (fileNames$#/folderNames$# cannot
+# enumerate dot-files, matching real macOS's own invisible .DS_Store).
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 9: installed-test canon and ghost semantics ---"
+
+check9Root$ = scratchRoot$ + "/check9"
+createFolder: check9Root$
+check9Prefs$ = check9Root$ + "/prefs"
+createFolder: check9Prefs$
+
+# --- 9a. emlManagerIsInstalled: ghost vs. real plugin ---
+
+check9Ghost$ = check9Prefs$ + "/plugin_Ghost"
+createFolder: check9Ghost$
+writeFileLine: check9Ghost$ + "/.DS_Store", "macOS junk Praat cannot enumerate"
+
+@emlManagerIsInstalled: check9Ghost$
+if emlManagerIsInstalled.installed = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: a folder with only a seeded .DS_Store is not installed"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: a ghost folder was reported installed"
+endif
+
+@emlHarnessBuildPlugin: check9Prefs$, "plugin_Real", "1.0.0"
+@emlManagerIsInstalled: check9Prefs$ + "/plugin_Real"
+if emlManagerIsInstalled.installed = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: a folder with setup.praat is installed"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: a real plugin (setup.praat present) was reported not installed"
+endif
+
+# --- 9b. the collision path: a ghost yields no annotation; a real
+#     installed plugin does ---
+
+check9Cand$ = check9Root$ + "/candidate"
+createFolder: check9Cand$
+@emlHarnessBuildPlugin: check9Cand$, "plugin_Ghost", ""
+
+@emlManagerInstalledCollisionCheck: check9Cand$ + "/plugin_Ghost", check9Ghost$, check9Root$
+if emlManagerInstalledCollisionCheck.hasCollision = 0 and emlManagerInstalledCollisionCheck.annot$ = ""
+    pass = pass + 1
+    appendInfoLine: "PASS: the collision path against a ghost yields no annotation"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: the collision path against a ghost -- hasCollision=",
+        ... emlManagerInstalledCollisionCheck.hasCollision, ", annot$='",
+        ... emlManagerInstalledCollisionCheck.annot$, "'"
+endif
+
+@emlHarnessBuildPlugin: check9Cand$, "plugin_Real", "2.0.0"
+@emlManagerInstalledCollisionCheck: check9Cand$ + "/plugin_Real",
+    ... check9Prefs$ + "/plugin_Real", check9Root$
+if emlManagerInstalledCollisionCheck.hasCollision = 1 and emlManagerInstalledCollisionCheck.annot$ <> ""
+    pass = pass + 1
+    appendInfoLine: "PASS: the collision path against a real installed plugin annotates ('",
+        ... emlManagerInstalledCollisionCheck.annot$, "')"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: the collision path against a real installed plugin -- hasCollision=",
+        ... emlManagerInstalledCollisionCheck.hasCollision
+endif
+
+# --- 9c. the remove listing: a ghost is included, annotated with the ghost
+#     suffix; a real plugin is not so annotated. Sec. 2c (REVISED): the
+#     ghost suffix (40 chars) always exceeds emlManager_labelSuffixCap (16),
+#     so it is always shortened via its own marker regardless of the name's
+#     length -- the annotation is present (head "lef" and tail "plugin" of
+#     the shortened suffix both survive) but the whole word "leftover" no
+#     longer does; that is expected, not a regression (Check 10 asserts the
+#     cap/marker mechanics directly).
+
+check9GhostShort$ = check9Prefs$ + "/plugin_X"
+createFolder: check9GhostShort$
+writeFileLine: check9GhostShort$ + "/.DS_Store", "macOS junk Praat cannot enumerate"
+
+@emlManagerRemoveBuildLabel: "plugin_X", 0, check9Prefs$, emlManager_boolLabelCap, 1
+if emlManagerRemoveBuildLabel.isGhost = 1
+    ... and index (emlManagerRemoveBuildLabel.label$, "lef") > 0
+    ... and endsWith (emlManagerRemoveBuildLabel.label$, "plugin")
+    pass = pass + 1
+    appendInfoLine: "PASS: the remove listing marks the ghost with its suffix ('",
+        ... emlManagerRemoveBuildLabel.label$, "')"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: the remove listing did not mark the ghost -- label$='",
+        ... emlManagerRemoveBuildLabel.label$, "'"
+endif
+
+@emlManagerRemoveBuildLabel: "plugin_Real", 0, check9Prefs$, emlManager_boolLabelCap, 2
+if emlManagerRemoveBuildLabel.isGhost = 0
+    ... and index (emlManagerRemoveBuildLabel.label$, "leftover") = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: the remove listing does not mark a real plugin as a ghost"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: a real plugin was marked as a ghost -- label$='",
+        ... emlManagerRemoveBuildLabel.label$, "'"
+endif
+
+# --- 9d. the install-loop mechanism for placing over a ghost: clear the
+#     remnant (the same emlManagerCleanupStaging call the install loop
+#     makes), THEN place -- confirms setup.praat lands directly at the top
+#     level rather than nested a level deep (which is what a plain
+#     emlManagerPlaceFolder onto a still-existing destination would do,
+#     since its "cp -R" nests source-into-destination when destination
+#     already exists).
+check9GhostDest$ = check9Prefs$ + "/plugin_GhostReuse"
+createFolder: check9GhostDest$
+writeFileLine: check9GhostDest$ + "/.DS_Store", "macOS junk Praat cannot enumerate"
+
+check9NewSource$ = check9Root$ + "/newsource"
+createFolder: check9NewSource$
+@emlHarnessBuildPlugin: check9NewSource$, "plugin_GhostReuse", "1.0.0"
+
+@emlManagerCleanupStaging: check9GhostDest$
+@emlManagerPlaceFolder: check9NewSource$ + "/plugin_GhostReuse", "plugin_GhostReuse", check9Prefs$
+
+if fileReadable (check9GhostDest$ + "/setup.praat")
+    ... and fileReadable (check9GhostDest$ + "/VERSION")
+    ... and not folderExists (check9GhostDest$ + "/plugin_GhostReuse")
+    pass = pass + 1
+    appendInfoLine: "PASS: placing over a cleared ghost lands the new files directly,",
+        ... " not nested a level deeper"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: placement over a cleared ghost did not land directly at the top level"
+endif
+
+# --- 9e. UX round spec sec. 4: the completion report actually emits the
+#     reused-leftover line on a ghost install -- drives the report-assembly
+#     path (emlManagerResolveInstallTarget + emlManagerBuildInstallSummaryLines,
+#     the same two procedures the main sequence's install loop calls) with
+#     no dialog. A plain (non-ghost) install is the control: exactly one
+#     summary line, no reused-leftover note.
+
+check9ArchiveDir$ = check9Prefs$ + "/archive"
+
+check9GhostReportDest$ = check9Prefs$ + "/plugin_GhostReport"
+createFolder: check9GhostReportDest$
+writeFileLine: check9GhostReportDest$ + "/.DS_Store", "macOS junk Praat cannot enumerate"
+
+check9ReportSource$ = check9Root$ + "/reportsource"
+createFolder: check9ReportSource$
+@emlHarnessBuildPlugin: check9ReportSource$, "plugin_GhostReport", "1.0.0"
+
+@emlManagerResolveInstallTarget: check9GhostReportDest$, "plugin_GhostReport",
+    ... check9Prefs$, check9ArchiveDir$
+if emlManagerResolveInstallTarget.wasGhostReused = 1 and emlManagerResolveInstallTarget.archiveOk = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: resolving a ghost destination sets wasGhostReused, archives nothing"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: resolving a ghost destination -- wasGhostReused=",
+        ... emlManagerResolveInstallTarget.wasGhostReused, ", archiveOk=",
+        ... emlManagerResolveInstallTarget.archiveOk
+endif
+
+@emlManagerPlaceFolder: check9ReportSource$ + "/plugin_GhostReport", "plugin_GhostReport", check9Prefs$
+@emlManagerBuildInstallSummaryLines: "plugin_GhostReport", "plugin_GhostReport",
+    ... emlManagerResolveInstallTarget.wasReplaced, emlManagerResolveInstallTarget.wasGhostReused,
+    ... check9Prefs$
+if emlManagerBuildInstallSummaryLines.n = 2
+    ... and emlManagerBuildInstallSummaryLines.lines$# [2] = emlManager_msgGhostReused$
+    pass = pass + 1
+    appendInfoLine: "PASS: the completion report emits the reused-leftover line on a ghost install ('",
+        ... emlManagerBuildInstallSummaryLines.lines$# [2], "')"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: reused-leftover report line not emitted -- n=",
+        ... emlManagerBuildInstallSummaryLines.n
+endif
+
+check9PlainSource$ = check9Root$ + "/plainsource"
+createFolder: check9PlainSource$
+@emlHarnessBuildPlugin: check9PlainSource$, "plugin_PlainInstall", "1.0.0"
+@emlManagerResolveInstallTarget: check9Prefs$ + "/plugin_PlainInstall", "plugin_PlainInstall",
+    ... check9Prefs$, check9ArchiveDir$
+@emlManagerBuildInstallSummaryLines: "plugin_PlainInstall", "plugin_PlainInstall",
+    ... emlManagerResolveInstallTarget.wasReplaced, emlManagerResolveInstallTarget.wasGhostReused,
+    ... check9Prefs$
+if emlManagerBuildInstallSummaryLines.n = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: a plain (non-ghost) install gets no reused-leftover line"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: a plain install unexpectedly got a reused-leftover line -- n=",
+        ... emlManagerBuildInstallSummaryLines.n
+endif
+
+# ============================================================================
+# UX round 2026-09-01 REVISED, sec. 2e: Check 10 -- the selection-row label
+# builder (emlManagerIndexPrefix + emlManagerApplyLabelCap), table-driven
+# against expected strings computed by the documented algorithm (sec. 2c:
+# cap = emlManager_boolLabelCap = 38, marker = emlManager_labelMarker$ =
+# "___", suffix shortened tail-preserving to at most
+# emlManager_labelSuffixCap = 16 chars before the name gets what's left).
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 10: selection-row label builder (table-driven) ---"
+
+managerSuffix$ = emlManagerRemove_managerSuffix$
+ghostSuffix$ = emlManagerRemove_ghostSuffix$
+
+# 10a. under-cap: unchanged apart from the identity prefix.
+@emlManagerIndexPrefix: 1
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_Short", "", emlManager_boolLabelCap
+expect10a$ = "n1_ plugin_Short"
+if emlManagerApplyLabelCap.capped$ = expect10a$
+    pass = pass + 1
+    appendInfoLine: "PASS: under-cap label is unchanged apart from its index prefix -- '",
+        ... expect10a$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: under-cap label -- expected '", expect10a$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10b. over-cap plain name: cap invariant holds exactly, marker inside.
+@emlManagerIndexPrefix: 2
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
+    ... "plugin_ThisIsAVeryLongPluginFolderNameIndeed", "", emlManager_boolLabelCap
+expect10b$ = "n2_ plugin_ThisIsAVer___lderNameIndeed"
+if emlManagerApplyLabelCap.capped$ = expect10b$
+    ... and length (emlManagerApplyLabelCap.capped$) = emlManager_boolLabelCap
+    pass = pass + 1
+    appendInfoLine: "PASS: over-cap plain name -> '", expect10b$, "' (", emlManager_boolLabelCap, " chars)"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: over-cap plain name -- expected '", expect10b$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10c. sec. 2e: two long names sharing a head, different rows (indices 3 and
+# 4) -> distinct labels, the distinguishing text carried in the preserved
+# tail (>= 14 chars, sec. 2c) even before the index is considered.
+@emlManagerIndexPrefix: 3
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
+    ... "plugin_CommonHeadPrefixSection_versionAAAA", "", emlManager_boolLabelCap
+distinct1$ = emlManagerApplyLabelCap.capped$
+@emlManagerIndexPrefix: 4
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
+    ... "plugin_CommonHeadPrefixSection_versionBBBB", "", emlManager_boolLabelCap
+distinct2$ = emlManagerApplyLabelCap.capped$
+expect10c1$ = "n3_ plugin_CommonHead___on_versionAAAA"
+expect10c2$ = "n4_ plugin_CommonHead___on_versionBBBB"
+tail1$ = right$ (distinct1$, length (distinct1$) - length ("n3_ "))
+tail2$ = right$ (distinct2$, length (distinct2$) - length ("n4_ "))
+if distinct1$ = expect10c1$ and distinct2$ = expect10c2$
+    ... and distinct1$ <> distinct2$ and tail1$ <> tail2$
+    pass = pass + 1
+    appendInfoLine: "PASS: two long same-headed names yield distinct labels, distinct even",
+        ... " before the index ('", tail1$, "' vs '", tail2$, "')"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: same-headed names -- got '", distinct1$, "' and '", distinct2$, "'"
+endif
+
+# 10d/10e. suffix preservation across a short and a long name: the manager
+# suffix (36 chars, > emlManager_labelSuffixCap) always shortens via its own
+# middle-marker now (sec. 2c fixes the suffix budget at 16 regardless of
+# name length) -- but it is NEVER absent.
+@emlManagerIndexPrefix: 5
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_X", managerSuffix$,
+    ... emlManager_boolLabelCap
+expect10d$ = "n5_ plugin_X (thi___ itself)"
+if emlManagerApplyLabelCap.capped$ = expect10d$
+    ... and startsWith (emlManagerApplyLabelCap.capped$, "n5_ plugin_X")
+    pass = pass + 1
+    appendInfoLine: "PASS: manager-suffix label (short name) -> '", expect10d$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: manager-suffix label (short name) -- expected '", expect10d$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+@emlManagerIndexPrefix: 6
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_EMLPraatPluginManager",
+    ... managerSuffix$, emlManager_boolLabelCap
+expect10e$ = "n6_ plugin____nManager (thi___ itself)"
+if emlManagerApplyLabelCap.capped$ = expect10e$
+    ... and length (emlManagerApplyLabelCap.capped$) = emlManager_boolLabelCap
+    ... and endsWith (emlManagerApplyLabelCap.capped$, "itself)")
+    pass = pass + 1
+    appendInfoLine: "PASS: manager-suffix label (long name, defect 2 regression:",
+        ... " suffix not dropped) -> '", expect10e$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: manager-suffix label (long name) -- expected '", expect10e$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10f/10g. the ghost suffix (40 chars), short and long name.
+@emlManagerIndexPrefix: 7
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_Ghost", ghostSuffix$,
+    ... emlManager_boolLabelCap
+expect10f$ = "n7_ plugin_Ghost (lef___ plugin)"
+if emlManagerApplyLabelCap.capped$ = expect10f$
+    ... and startsWith (emlManagerApplyLabelCap.capped$, "n7_ plugin_Ghost")
+    pass = pass + 1
+    appendInfoLine: "PASS: ghost-suffix label (short name) -> '", expect10f$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: ghost-suffix label (short name) -- expected '", expect10f$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+@emlManagerIndexPrefix: 8
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_ALongerGhostFolderName",
+    ... ghostSuffix$, emlManager_boolLabelCap
+expect10g$ = "n8_ plugin____lderName (lef___ plugin)"
+if emlManagerApplyLabelCap.capped$ = expect10g$
+    ... and length (emlManagerApplyLabelCap.capped$) = emlManager_boolLabelCap
+    ... and endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+    pass = pass + 1
+    appendInfoLine: "PASS: ghost-suffix label (long name) -> '", expect10g$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: ghost-suffix label (long name) -- expected '", expect10g$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10h. a moderate synthetic suffix (23 chars, still > emlManager_labelSuffixCap)
+# -- both the name and the suffix shorten; the suffix's own tail survives.
+@emlManagerIndexPrefix: 9
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_ThisNameIsQuiteLongIndeedYes",
+    ... " [v2.0-beta annotation]", emlManager_boolLabelCap
+expect10h$ = "n9_ plugin____ndeedYes [v2.___otation]"
+if emlManagerApplyLabelCap.capped$ = expect10h$
+    ... and endsWith (emlManagerApplyLabelCap.capped$, "otation]")
+    pass = pass + 1
+    appendInfoLine: "PASS: moderate-suffix case -> '", expect10h$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: moderate-suffix case -- expected '", expect10h$,
+        ... "' got '", emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10i. sec. 2e / defect 1: the MEASURED overflow case -- a name 35-37 chars
+# long (the old formula's suffixBudget = cap - len(name) collapsed to 1-3
+# chars there, which its own middle-ellipsis then silently overran) combined
+# with a long suffix. Swept across the whole 35-37 range: the cap must never
+# be exceeded in this or any other branch.
+overflowOk = 1
+for overflowLen from 35 to 37
+    @emlHarnessRepeatChar: "N", overflowLen - 7
+    overflowName$ = "plugin_" + emlHarnessRepeatChar.result$
+    @emlManagerIndexPrefix: 10
+    @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, overflowName$, ghostSuffix$,
+        ... emlManager_boolLabelCap
+    if length (emlManagerApplyLabelCap.capped$) > emlManager_boolLabelCap
+        ... or not endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+        overflowOk = 0
+        appendInfoLine: "  overflow sweep len=", overflowLen, " -> '",
+            ... emlManagerApplyLabelCap.capped$, "' (", length (emlManagerApplyLabelCap.capped$), " chars)"
+    endif
+endfor
+if overflowOk = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: defect-1 overflow sweep (name len 35-37 + long suffix) never exceeds",
+        ... " the cap, suffix always present"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: defect-1 overflow sweep exceeded the cap or dropped the suffix"
+endif
+
+# 10j. defect 2 regression: name length >= the whole cap, WITH a suffix --
+# the suffix must still survive (never dropped), the cap invariant still
+# holds.
+@emlHarnessRepeatChar: "Z", 40
+tooLongName$ = "plugin_" + emlHarnessRepeatChar.result$
+@emlManagerIndexPrefix: 1
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, tooLongName$, ghostSuffix$,
+    ... emlManager_boolLabelCap
+if length (emlManagerApplyLabelCap.capped$) <= emlManager_boolLabelCap
+    ... and endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+    pass = pass + 1
+    appendInfoLine: "PASS: defect-2 regression -- a name >= the cap keeps its suffix -> '",
+        ... emlManagerApplyLabelCap.capped$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: defect-2 regression -- suffix dropped or cap exceeded, got '",
+        ... emlManagerApplyLabelCap.capped$, "'"
+endif
+
+# 10k. sec. 2e / defect 3: two rows whose name+suffix are IDENTICAL (the
+# text after the index prefix comes out byte-identical) still get distinct
+# full labels -- and distinct readback variables -- solely from the index
+# (single-digit indices 1 and 9, so the prefix WIDTH is also identical,
+# isolating the index itself as the only source of the difference).
+sameName$ = "plugin_VeryLongIdenticalPluginNameHere"
+@emlManagerIndexPrefix: 1
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, sameName$, "", emlManager_boolLabelCap
+labelIdx1$ = emlManagerApplyLabelCap.capped$
+@emlManagerDeriveLabel: labelIdx1$
+derivedIdx1$ = emlManagerDeriveLabel.derived$
+@emlManagerIndexPrefix: 9
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, sameName$, "", emlManager_boolLabelCap
+labelIdx9$ = emlManagerApplyLabelCap.capped$
+@emlManagerDeriveLabel: labelIdx9$
+derivedIdx9$ = emlManagerDeriveLabel.derived$
+postPrefix1$ = right$ (labelIdx1$, length (labelIdx1$) - length ("n1_ "))
+postPrefix9$ = right$ (labelIdx9$, length (labelIdx9$) - length ("n9_ "))
+if postPrefix1$ = postPrefix9$ and labelIdx1$ <> labelIdx9$ and derivedIdx1$ <> derivedIdx9$
+    pass = pass + 1
+    appendInfoLine: "PASS: identical post-prefix text ('", postPrefix1$,
+        ... "') still yields distinct labels and distinct readback variables ('",
+        ... derivedIdx1$, "' vs '", derivedIdx9$, "') -- the Dialog-1 readback",
+        ... " collapse (defect 3) cannot recur"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: index-prefix collision cure -- label1='", labelIdx1$,
+        ... "' label9='", labelIdx9$, "' derived1='", derivedIdx1$, "' derived9='", derivedIdx9$, "'"
+endif
+
+# 10l. sec. 2e: sanitizer-survival of the prefix and the marker, plus the
+# leading-letter requirement (measured, GUI drive: a Praat variable name
+# must start with a letter, which is why emlManager_indexLabelLead$ puts a
+# fixed letter at the very front of every index prefix -- see
+# emlManagerIndexPrefix). Runs a capped label carrying both the index
+# prefix and the marker (row 10f's suffix) through emlManagerDeriveLabel
+# and confirms: derived$ starts with a letter (so indirect '.derived$'
+# readback parses at all -- the real, GUI-measured failure mode this
+# guards), the leading letter, index digit, and its underscore are all
+# still there, the marker's three underscores are still there, and nothing
+# outside [A-Za-z0-9_] survives into .derived$ (the readback variable
+# name).
+@emlManagerIndexPrefix: 7
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_Ghost", ghostSuffix$,
+    ... emlManager_boolLabelCap
+@emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+sanitizedDerived$ = emlManagerDeriveLabel.derived$
+if startsWith (sanitizedDerived$, emlManager_indexLabelLead$ + "7_")
+    ... and index_regex (sanitizedDerived$, "^[a-z]") > 0
+    ... and index (sanitizedDerived$, emlManager_labelMarker$) > 0
+    ... and index_regex (sanitizedDerived$, "[^A-Za-z0-9_]") = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: derived$ starts with a letter (leading-letter index prefix), the",
+        ... " index and the ", emlManager_labelMarker$,
+        ... " marker both survive the sanitizer intact -- derived$ = '", sanitizedDerived$, "'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: sanitizer-survival -- derived$ = '", sanitizedDerived$, "'"
+endif
+
+# ============================================================================
+# UX round 2026-09-01, item 4: Check 11 -- line-budget pagination
+# (emlManagerPageBudgetWalk) on synthetic item sets.
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 11: line-budget pagination (synthetic item sets) ---"
+
+# 45 plain checkboxes (1 line each) -> pages of 30 + 15
+plain45# = zero# (45)
+for i45 from 1 to 45
+    plain45# [i45] = 1
+endfor
+@emlManagerPageBudgetWalk: plain45#, 45, emlManager_pageLineBudget, 0
+if emlManagerPageBudgetWalk.nPages = 2
+    ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
+    ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 30
+    ... and emlManagerPageBudgetWalk.pageStartItem# [2] = 31
+    ... and emlManagerPageBudgetWalk.pageEndItem# [2] = 45
+    pass = pass + 1
+    appendInfoLine: "PASS: 45 plain checkboxes -> pages of 30 + 15"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: 45 plain checkboxes -- nPages=", emlManagerPageBudgetWalk.nPages
+endif
+
+# 10 annotated items of 4 lines each -> 7 per page (28 lines); the 8th item
+# never splits across the page boundary even though 2 lines of budget (30 -
+# 28) remain
+annot10# = zero# (10)
+for i10 from 1 to 10
+    annot10# [i10] = 4
+endfor
+@emlManagerPageBudgetWalk: annot10#, 10, emlManager_pageLineBudget, 0
+if emlManagerPageBudgetWalk.nPages = 2
+    ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
+    ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 7
+    ... and emlManagerPageBudgetWalk.pageStartItem# [2] = 8
+    ... and emlManagerPageBudgetWalk.pageEndItem# [2] = 10
+    pass = pass + 1
+    appendInfoLine: "PASS: 10 items of 4 lines each -> 7 per page (28 lines), item 8 never splits"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: annotated 4-line items -- nPages=", emlManagerPageBudgetWalk.nPages,
+        ... ", page1 end=", emlManagerPageBudgetWalk.pageEndItem# [1]
+endif
+
+# last-page reserve honored, WITH slack: 20 plain items + a 2-line reserve
+# fit together on one page (20 + 2 = 22 <= 30)
+plain20# = zero# (20)
+for i20 from 1 to 20
+    plain20# [i20] = 1
+endfor
+@emlManagerPageBudgetWalk: plain20#, 20, emlManager_pageLineBudget, 2
+if emlManagerPageBudgetWalk.nPages = 1
+    ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
+    ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 20
+    pass = pass + 1
+    appendInfoLine: "PASS: last-page reserve with slack -- 20 items + reserve share one page"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: last-page reserve with slack -- nPages=", emlManagerPageBudgetWalk.nPages
+endif
+
+# last-page reserve honored, WITHOUT slack: 29 plain items already fill the
+# budget to the edge (29 + 2 = 31 > 30) -- the reserve spills onto its own
+# page rather than crowding the last item off
+plain29# = zero# (29)
+for i29 from 1 to 29
+    plain29# [i29] = 1
+endfor
+@emlManagerPageBudgetWalk: plain29#, 29, emlManager_pageLineBudget, 2
+if emlManagerPageBudgetWalk.nPages = 2
+    ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
+    ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 29
+    ... and emlManagerPageBudgetWalk.pageStartItem# [2] > emlManagerPageBudgetWalk.pageEndItem# [2]
+    pass = pass + 1
+    appendInfoLine: "PASS: last-page reserve without slack -- spills onto its own page,",
+        ... " no item is pushed off page 1"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: last-page reserve without slack -- nPages=",
+        ... emlManagerPageBudgetWalk.nPages, ", page1 end=", emlManagerPageBudgetWalk.pageEndItem# [1]
+endif
+
+# ============================================================================
+# UX round 2026-09-01 REVISED, sec. 2a: Check 12 -- index-prefixed labels
+# are valid, indirectly-readable Praat variables end to end. MEASURED GUI
+# REGRESSION: a Praat script variable name must start with a letter (a
+# pause-form boolean's readback substitutes '.derived$' as literal source
+# text and re-parses it), and every index-prefixed label starts with a
+# digit -- this broke real removal in the GUI drive with "Unknown symbol:
+# <12_...>" before emlManagerDeriveLabel's leading-digit guard. Builds
+# labels across an 18-row fixture (the same count as the real drive's
+# sandbox), assigns each row's derived variable by the SAME indirect
+# mechanism Praat uses for a checked/unchecked pause-form boolean, then
+# drives the real emlManagerReadSelections and confirms every value round-
+# trips. This is the headless regression guard for the exact defect Check
+# 10l's static sanitizer check alone did not catch (a static string check
+# cannot see a parse error).
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 12: index-prefixed labels are valid Praat variables (readback) ---"
+
+check12N = 18
+check12Derived$# = empty$# (check12N)
+check12Expect# = zero# (check12N)
+for check12I from 1 to check12N
+    @emlManagerIndexPrefix: check12I
+    check12Name$ = "plugin_Row" + string$ (check12I)
+    @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, check12Name$, "", emlManager_boolLabelCap
+    @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+    check12Derived$# [check12I] = emlManagerDeriveLabel.derived$
+    check12Expect# [check12I] = check12I mod 2
+    check12Vn$ = check12Derived$# [check12I]
+    'check12Vn$' = check12Expect# [check12I]
+endfor
+
+@emlManagerReadSelections: check12Derived$#, check12N
+check12Ok = 1
+for check12I from 1 to check12N
+    if emlManagerReadSelections.selected# [check12I] <> check12Expect# [check12I]
+        check12Ok = 0
+    endif
+endfor
+if check12Ok = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: all ", check12N, " index-prefixed labels round-trip through indirect",
+        ... " readback (the exact mechanism the real pause-form boolean uses)"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: index-prefixed label readback mismatch somewhere in ", check12N, " rows"
 endif
 
 # ============================================================================

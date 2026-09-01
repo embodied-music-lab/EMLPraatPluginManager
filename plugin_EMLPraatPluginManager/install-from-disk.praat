@@ -9,7 +9,17 @@
 #          lets the user select which to install and whether to keep literal
 #          names, archives any existing same-named plugin, and places the new one.
 # Date: 1 September 2026
-# Version: 5.0
+# Version: 5.1
+#
+# 5.1 -- REVISED selection-label subsystem (sec. 2 of the UX round spec,
+#       after the failed v0.6.1 drive): every selection-row label now begins
+#       with an index prefix that is identity, never touched by shortening,
+#       so the derived readback variable is unique by construction; the cap
+#       (emlManager_boolLabelCap) is a hard invariant enforced by the
+#       shortening helper itself, not by callers passing sane budgets; a
+#       suffix is shortened, never dropped; the shortening marker is "___"
+#       (survives the sanitizer) rather than "..." (stripped by it); and the
+#       pre-dialog duplicate check compares real (uncapped) proposed names.
 #
 # 4.1 -- Exit-button labels: buttons that stop the script now read "Quit"
 #       (were "Cancel"). Rule: "Cancel" only when the action is cancelled
@@ -33,7 +43,59 @@ emlManager_setupFile$ = "setup.praat"
 emlManager_stagingName$ = "eml_pm_staging"
 emlManager_archiveName$ = "eml_pm_archive"
 emlManager_resultsName$ = "found_plugins.txt"
-emlManager_pageSize = 12
+
+# UX round 2026-09-01, item 3: every paginated pause dialog pages by
+# rendered-LINE budget (each wrapped comment line, each blank comment, each
+# boolean counts as 1), not by item count -- a plain checkbox list pages at
+# this many items; an annotated list (multi-line description per item) pages
+# at whatever item count fits the same line budget. No literal page size
+# appears anywhere else in this file or in remove-plugin.praat.
+emlManager_pageLineBudget = 30
+
+# UX round 2026-09-01 REVISED, sec. 2: a checkbox label longer than this is
+# shortened with a middle marker (see emlManagerApplyLabelCap). The cap is a
+# HARD INVARIANT -- every branch of the label builder below is structured so
+# the result can never exceed it, index prefix included.
+emlManager_boolLabelCap = 38
+# Sanitizer-proof shortening marker: "." and "(" both get stripped to spaces
+# by emlManagerDeriveLabel's sanitizer (sec. 2), which is why the old "..."
+# never actually showed up in a checkbox -- digits and "_" survive, so three
+# underscores do.
+emlManager_labelMarker$ = "___"
+# Sec. 2a: every selection-row checkbox label begins with an index prefix
+# (digits and "_" survive the sanitizer, making the label -- and its
+# derived readback variable -- unique by construction regardless of what
+# the cap does to the rest). Every description comment / Dialog-2 full-name
+# line begins with the same index as "<index>. " instead (plain display
+# text, not passed through the sanitizer, so the more readable punctuation
+# is fine there).
+# LEADING LETTER (measured, GUI drive): a Praat script variable name must
+# start with a letter, and a pause-form boolean's real internal name is
+# Praat's OWN derivation of its label text -- not something this plugin can
+# override after the fact (a bare "<index>_ " prefix starts with a digit,
+# which is not merely unconventional: reading such a widget back through
+# indirect substitution is a parse error, "Unknown symbol", confirmed
+# against a real pause-form boolean under Xvfb; prepending a guard letter
+# to only OUR OWN copy of the derived name does not fix it either, since it
+# still does not match whatever Praat itself called the widget --
+# "Unknown variable", also confirmed). So the fixed leading letter goes on
+# the identity prefix ITSELF, ahead of the index digits: every checkbox
+# label this plugin ever builds starts with a letter, both the widget's
+# real Praat-derived name and this file's own mirrored emlManagerDeriveLabel
+# agree on it (confirmed against real pause-form booleans, single- and
+# double-digit indices, values round-tripping correctly both ways).
+emlManager_indexLabelLead$ = "n"
+emlManager_indexLabelSep$ = "_ "
+emlManager_indexDescSep$ = ". "
+# Sec. 2c: when a suffix is present it is shortened (tail-preserving) to at
+# most this many characters before the name gets whatever budget remains --
+# the suffix is NEVER dropped, only ever shortened.
+emlManager_labelSuffixCap = 16
+# Sec. 2c: minimum tail characters preserved when middle-shortening -- 14 for
+# a bare name (no suffix competing for budget), 8 for a name shortened
+# alongside a surviving suffix, and 8 for the suffix's own shortening.
+emlManager_labelTailMinBare = 14
+emlManager_labelTailMinShared = 8
 
 # Canon wrap width for every pause-dialog wrap call site in the plugin
 # (this file and remove-plugin.praat). 78 overflowed Praat's pause
@@ -90,6 +152,11 @@ emlManager_annotInstEqualMid$ = ") is already installed"
 emlManager_annotInstIdentical$ = "already installed; appears identical to the installed copy"
 emlManager_annotInstDiffers$ = "already installed; differs from the installed copy"
 emlManager_annotInstSuffix$ = "; replacing keeps the current copy in the archive folder"
+
+# UX round 2026-09-01, item 1: the completion-report line added when install
+# placed a plugin over a ghost folder (a plugin_* folder left behind by an
+# earlier removal, containing nothing Praat can see).
+emlManager_msgGhostReused$ = "Reused a leftover folder from an earlier removal."
 
 emlManager_annotConfirmed$ = "name confirmed by the plugin's own scripts"
 emlManager_annotKeepsName$ = "keeps its folder name -- the plugin's scripts reference it"
@@ -199,6 +266,21 @@ procedure emlManagerReadVersion: .folder$
             endwhile
             .version$ = .raw$
         endif
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# UX round 2026-09-01, item 1 (the installed-test canon). A plugin_* folder
+# is installed if and only if it contains a top-level setup.praat -- Praat's
+# own activation rule. A folder that exists but has no setup.praat (every
+# file Praat's enumeration could see was already removed; only something
+# Praat cannot enumerate, e.g. a macOS .DS_Store, is left) is a GHOST, not an
+# installed plugin. ONE canon procedure; every site that asks "is a plugin
+# already installed at this folder" routes through this.
+procedure emlManagerIsInstalled: .folderPath$
+    .installed = 0
+    if fileReadable (.folderPath$ + "/" + emlManager_setupFile$)
+        .installed = 1
     endif
 endproc
 
@@ -366,6 +448,27 @@ procedure emlManagerInstalledAnnotation: .candFolder$, .instFolder$, .scratchDir
 endproc
 
 # ----------------------------------------------------------------------------
+# Item 1: the pre-dialog collision check on a proposed install name. A
+# collision exists only when .destPath$ is an INSTALLED plugin (per
+# emlManagerIsInstalled); a ghost folder at that path is fresh ground -- no
+# annotation, no version comparison, .hasCollision stays 0 and the caller's
+# default checkbox state is left untouched.
+procedure emlManagerInstalledCollisionCheck: .fPath$, .destPath$, .scratchDir$
+    .hasCollision = 0
+    .annot$ = ""
+    .checked = 0
+    if folderExists (.destPath$)
+        @emlManagerIsInstalled: .destPath$
+        if emlManagerIsInstalled.installed = 1
+            .hasCollision = 1
+            @emlManagerInstalledAnnotation: .fPath$, .destPath$, .scratchDir$
+            .annot$ = emlManagerInstalledAnnotation.annot$
+            .checked = emlManagerInstalledAnnotation.checked
+        endif
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
 # Item 4. Splits .text$ into successive lines of at most .maxWidth characters,
 # breaking only at word boundaries. Never shortens or drops text -- a single
 # word longer than .maxWidth stays whole on its own line.
@@ -400,6 +503,189 @@ procedure emlManagerWrapText: .text$, .maxWidth
         .trimmed$# [.ti] = .lines$# [.ti]
     endfor
     .lines$# = .trimmed$#
+endproc
+
+# ----------------------------------------------------------------------------
+# Sec. 2 helper: middle-shortens .s$ to AT MOST .cap characters -- head,
+# emlManager_labelMarker$, then a tail of up to .minTail characters. This is
+# the one place the hard cap invariant is enforced, so it is written to be
+# unconditionally safe rather than relying on callers to pass a sane .cap:
+#   - .s$ already fits: returned unchanged (may be shorter than .cap).
+#   - .cap has no room even for the marker: hard-truncated to .cap chars,
+#     no marker (there is nowhere to put one).
+#   - otherwise: head + marker + tail totals exactly .cap, tail shrinking
+#     below .minTail (down to 0) before head is ever allowed to.
+# Every call site below only ever needs the "totals exactly .cap" case, but
+# the guard branches mean this procedure can never itself be the cause of an
+# over-cap result, however small a .cap a future caller passes.
+procedure emlManagerMiddleEllipsis: .s$, .cap, .minTail
+    .safeCap = .cap
+    if .safeCap < 0
+        .safeCap = 0
+    endif
+    .markerLen = length (emlManager_labelMarker$)
+    if length (.s$) <= .safeCap
+        .result$ = .s$
+    elsif .safeCap <= .markerLen
+        .result$ = left$ (.s$, .safeCap)
+    else
+        .avail = .safeCap - .markerLen
+        .tailLen = .minTail
+        if .tailLen > .avail
+            .tailLen = .avail
+        endif
+        if .tailLen < 0
+            .tailLen = 0
+        endif
+        .headLen = .avail - .tailLen
+        .result$ = left$ (.s$, .headLen) + emlManager_labelMarker$ + right$ (.s$, .tailLen)
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Sec. 2 (REVISED): the selection-row label builder. .prefix$ is the index
+# prefix (emlManagerIndexPrefix.prefix$, e.g. "n12_ ") -- identity, ALWAYS
+# kept whole, never touched by shortening. .name$ is the plugin/folder name;
+# .suffix$ is an annotation appended after it (the manager suffix, the ghost
+# suffix, or "" for a plain row).
+#
+# Deterministic budget (sec. 2c) -- the cap invariant holds in every branch:
+#   - Everything fits as-is: .prefix$ + .name$ + .suffix$, untouched.
+#   - No suffix: .name$ middle-shortens into cap - len(prefix), tail >= 14.
+#   - Suffix present: the suffix is shortened tail-preserving to at most
+#     emlManager_labelSuffixCap chars FIRST (never dropped), then .name$
+#     gets whatever budget is left (cap - prefix - shortened suffix) and
+#     middle-shortens into THAT, tail >= 8. Since emlManagerMiddleEllipsis
+#     itself never exceeds the cap it is given, and every budget here is
+#     computed by subtraction from the true remaining room, the total can
+#     never exceed .cap regardless of name/suffix length (the measured
+#     35-37-char-name-plus-long-suffix overflow is structurally impossible
+#     now: the suffix's own budget no longer depends on the name's length).
+procedure emlManagerApplyLabelCap: .prefix$, .name$, .suffix$, .cap
+    .budget = .cap - length (.prefix$)
+    if .budget < 0
+        .budget = 0
+    endif
+    .full$ = .name$ + .suffix$
+    if length (.full$) <= .budget
+        .capped$ = .prefix$ + .full$
+    elsif .suffix$ = ""
+        @emlManagerMiddleEllipsis: .name$, .budget, emlManager_labelTailMinBare
+        .capped$ = .prefix$ + emlManagerMiddleEllipsis.result$
+    else
+        if length (.suffix$) <= emlManager_labelSuffixCap
+            .shortSuffix$ = .suffix$
+        else
+            @emlManagerMiddleEllipsis: .suffix$, emlManager_labelSuffixCap,
+                ... emlManager_labelTailMinShared
+            .shortSuffix$ = emlManagerMiddleEllipsis.result$
+        endif
+        .nameBudget = .budget - length (.shortSuffix$)
+        if length (.name$) <= .nameBudget
+            .cappedName$ = .name$
+        else
+            @emlManagerMiddleEllipsis: .name$, .nameBudget, emlManager_labelTailMinShared
+            .cappedName$ = emlManagerMiddleEllipsis.result$
+        endif
+        .capped$ = .prefix$ + .cappedName$ + .shortSuffix$
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Sec. 2a: the identity prefix for selection-row .index (1-based, its
+# position in the page-1 listing) -- a fixed leading letter
+# (emlManager_indexLabelLead$; see its comment for why), then the index
+# digits and "_", all of which survive emlManagerDeriveLabel's sanitizer
+# untouched, so the derived readback variable is both a valid Praat
+# identifier and unique by construction no matter what the cap does to the
+# rest of the label.
+procedure emlManagerIndexPrefix: .index
+    .prefix$ = emlManager_indexLabelLead$ + string$ (.index) + emlManager_indexLabelSep$
+endproc
+
+# ----------------------------------------------------------------------------
+# Sec. 2a: the plain-text index prefix used on description comments and the
+# remove flow's Dialog-2 full-name lines -- "<index>. " -- so a shortened
+# checkbox label can always be resolved against its full name by index. Not
+# passed through the sanitizer, so it can use punctuation the checkbox
+# prefix cannot.
+procedure emlManagerIndexDescPrefix: .index
+    .prefix$ = string$ (.index) + emlManager_indexDescSep$
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 3: line-budget pagination. Packs .nItems items (each .lineCounts#[i]
+# rendered lines) into pages of at most .budget lines, never splitting an
+# item across a page boundary -- a page always takes at least one item, even
+# one whose own line count exceeds the budget, so the walk always makes
+# progress. When .reserveLines > 0 (the install dialog's literal-toggle
+# boolean plus its blank spacer) a trailing pseudo-item of that many lines is
+# walked along with the real items, so the SAME pass that decides page
+# breaks also decides whether the reserve fits on the last items' page or
+# needs a page of its own -- one canon walk, n computed once.
+# Output: .nPages, and .pageStartItem#/.pageEndItem# (1-based indices into
+# the real items, per page; a page holding only the reserve has
+# .pageStartItem# [.] > .pageEndItem# [.], an empty range of real items).
+procedure emlManagerPageBudgetWalk: .lineCounts#, .nItems, .budget, .reserveLines
+    .hasReserve = .reserveLines > 0
+    if .hasReserve = 1
+        .totalUnits = .nItems + 1
+    else
+        .totalUnits = .nItems
+    endif
+
+    if .totalUnits = 0
+        .nPages = 0
+        .pageStartItem# = zero# (0)
+        .pageEndItem# = zero# (0)
+    else
+        .work# = zero# (.totalUnits)
+        for .i from 1 to .nItems
+            .work# [.i] = .lineCounts# [.i]
+        endfor
+        if .hasReserve = 1
+            .work# [.totalUnits] = .reserveLines
+        endif
+
+        .rawStartUnit# = zero# (.totalUnits)
+        .rawEndUnit# = zero# (.totalUnits)
+        .nPages = 0
+        .cur = 1
+        while .cur <= .totalUnits
+            .sum = 0
+            .last = .cur - 1
+            .u = .cur
+            .keepGoing = 1
+            while .keepGoing = 1 and .u <= .totalUnits
+                .cand = .sum + .work# [.u]
+                if .sum = 0 or .cand <= .budget
+                    .sum = .cand
+                    .last = .u
+                    .u = .u + 1
+                else
+                    .keepGoing = 0
+                endif
+            endwhile
+            .nPages = .nPages + 1
+            .rawStartUnit# [.nPages] = .cur
+            .rawEndUnit# [.nPages] = .last
+            .cur = .last + 1
+        endwhile
+
+        .pageStartItem# = zero# (.nPages)
+        .pageEndItem# = zero# (.nPages)
+        for .p from 1 to .nPages
+            .su = .rawStartUnit# [.p]
+            .eu = .rawEndUnit# [.p]
+            if .eu > .nItems
+                .eItem = .nItems
+            else
+                .eItem = .eu
+            endif
+            .pageStartItem# [.p] = .su
+            .pageEndItem# [.p] = .eItem
+        endfor
+    endif
 endproc
 
 # ----------------------------------------------------------------------------
@@ -851,6 +1137,19 @@ endproc
 # fixing it here fixes every reader in one place (checked: no caller
 # depended on the unlowered form -- see the callers list at the bottom of
 # this comment).
+# LEADING-CHARACTER REQUIREMENT (measured, sec. 2a's GUI drive): a Praat
+# script variable name must start with a letter. A label that starts with a
+# digit does not just derive an unconventional variable name -- reading it
+# back through indirect substitution ('.derived$') re-parses the substituted
+# text as Praat code, and a digit followed by "_" is a parse error there
+# ("Unknown symbol"). This procedure cannot fix that after the fact: it only
+# mirrors whatever Praat itself already did to the WIDGET's real internal
+# name, which for a digit-led label is not simply "add a prefix" (measured:
+# prepending a guard letter here does not match Praat's own name for the
+# widget, "Unknown variable" instead of "Unknown symbol"). The fix has to be
+# upstream, in what .name$ is to begin with -- see emlManagerIndexPrefix,
+# which starts the index prefix with a fixed letter so every label this
+# procedure ever sees already starts with one.
 procedure emlManagerDeriveLabel: .name$
     .san$ = replace_regex$ (.name$, "[^A-Za-z0-9_]", " ", 0)
     while startsWith (.san$, " ")
@@ -1016,6 +1315,72 @@ procedure emlManagerVerify: .pluginName$, .prefsDir$, .hadSetup
         endif
     else
         .ok = 1
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 1 / UX round spec sec. 4: resolves what happens at .destPath$ before a
+# plugin is placed there -- archives an actually-installed plugin (the
+# installed-test canon, emlManagerIsInstalled), or, when .destPath$ is a
+# ghost (exists but not installed), clears the remnant as fresh ground with
+# no archive. Neither branch runs when nothing is there yet. Pulled out of
+# the main sequence's install loop, unchanged, so the harness can drive this
+# decision directly without a dialog (this is the collision-resolution half
+# of that loop; emlManagerPlaceFolder/emlManagerVerify, called after this,
+# are the placement half and already covered by Check 9d).
+procedure emlManagerResolveInstallTarget: .destPath$, .instName$, .prefsDir$, .archiveDir$
+    .wasReplaced = 0
+    .wasGhostReused = 0
+    .archiveOk = 1
+    .preSummary$ = ""
+    if folderExists (.destPath$)
+        @emlManagerIsInstalled: .destPath$
+        if emlManagerIsInstalled.installed = 1
+            @emlManagerArchiveExisting: .instName$, .prefsDir$, .archiveDir$
+            if emlManagerArchiveExisting.ok = 1
+                .wasReplaced = 1
+            else
+                .archiveOk = 0
+                .preSummary$ = emlManagerArchiveExisting.message$
+            endif
+        else
+            @emlManagerCleanupStaging: .destPath$
+            .wasGhostReused = 1
+        endif
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Item 1 / UX round spec sec. 4: the one or two completion-report summary
+# lines for a single successfully-placed-and-verified plugin -- the plain
+# success line, plus (only when .wasGhostReused = 1) the ghost-reused note,
+# emlManager_msgGhostReused$. Also returns the installed-command report
+# fields (.reportShow/.reportFolder$/.reportPath$) for that same row. Pulled
+# out of the main sequence's install loop, unchanged, so the harness can
+# assert the ghost-reused line is actually emitted (spec sec. 4) without a
+# dialog. Not called at all when verification failed -- the caller emits its
+# own single "FAILED: ..." line in that case, as before.
+procedure emlManagerBuildInstallSummaryLines: .instName$, .litName$,
+    ... .wasReplaced, .wasGhostReused, .prefsDir$
+    .line$ = .instName$
+    if .instName$ <> .litName$
+        .line$ = .line$ + " (" + emlManager_annotRenamedFrom$ + .litName$ + ")"
+    endif
+    if .wasReplaced = 1
+        .line$ = .line$ + emlManager_msgArchiveNote$
+    endif
+    .reportShow = 1
+    .reportFolder$ = .instName$
+    .reportPath$ = .prefsDir$ + "/" + .instName$ + "/" + emlManager_setupFile$
+    if .wasGhostReused = 1
+        .n = 2
+        .lines$# = empty$# (2)
+        .lines$# [1] = .line$
+        .lines$# [2] = emlManager_msgGhostReused$
+    else
+        .n = 1
+        .lines$# = empty$# (1)
+        .lines$# [1] = .line$
     endif
 endproc
 
@@ -1450,6 +1815,7 @@ if not variableExists ("emlManager_harnessMode")
     rawProposal$# = empty$# (nFound)
     rawRenamed$# = empty$# (nFound)
     rawDesc$# = empty$# (nFound)
+    rawFullName$# = empty$# (nFound)
     rawSetup# = zero# (nFound)
     rawDefault# = zero# (nFound)
     rawKeep# = zero# (nFound)
@@ -1550,13 +1916,17 @@ if not variableExists ("emlManager_harnessMode")
 
         # already-installed annotation (checked against the proposed name),
         # version-aware per item 3; overrides this row's default checkbox
-        # state when (and only when) a collision is found.
+        # state when (and only when) a collision with an ACTUALLY INSTALLED
+        # plugin is found (item 1: the installed-test canon). A folder that
+        # exists but is not installed -- a ghost left behind by an earlier
+        # removal -- is fresh ground: no annotation, no version comparison,
+        # default checkbox state untouched.
         annotInst$ = ""
-        if folderExists (prefsDir$ + "/" + propName$)
-            @emlManagerInstalledAnnotation: fPath$, prefsDir$ + "/" + propName$,
-                ... stagingPath$
-            annotInst$ = emlManagerInstalledAnnotation.annot$
-            rawDefault# [iFound] = emlManagerInstalledAnnotation.checked
+        @emlManagerInstalledCollisionCheck: fPath$, prefsDir$ + "/" + propName$,
+            ... stagingPath$
+        if emlManagerInstalledCollisionCheck.hasCollision = 1
+            annotInst$ = emlManagerInstalledCollisionCheck.annot$
+            rawDefault# [iFound] = emlManagerInstalledCollisionCheck.checked
         endif
 
         # display name from the PROPOSED name's suffix
@@ -1577,6 +1947,10 @@ if not variableExists ("emlManager_harnessMode")
         endif
         rawDesc$# [iFound] = displayName$ + " (" + annotAll$
             ... + ") -- at " + relPath$
+        # Real (uncapped) proposed name, carried alongside the display text
+        # so the sec. 2a index-prefixed description comment can show the
+        # FULL folder name the checkbox's capped label may have shortened.
+        rawFullName$# [iFound] = propName$
     endfor
 
     # --- sec. 6 ancestor collapse: drop an ancestor whose proposal equals a
@@ -1625,20 +1999,38 @@ if not variableExists ("emlManager_harnessMode")
             path$# [kRow] = rawPath$# [iFound]
             proposal$# [kRow] = rawProposal$# [iFound]
             renamed$# [kRow] = rawRenamed$# [iFound]
-            descLines$# [kRow] = rawDesc$# [iFound]
+            # Sec. 2a: the description comment is prefixed with the same
+            # index as the checkbox label below, and states the FULL
+            # (uncapped) proposed name, so a shortened checkbox can always
+            # be resolved against it.
+            @emlManagerIndexDescPrefix: kRow
+            descLines$# [kRow] = emlManagerIndexDescPrefix.prefix$
+                ... + rawFullName$# [iFound] + " -- " + rawDesc$# [iFound]
             setupFlags# [kRow] = rawSetup# [iFound]
             defaultFlags# [kRow] = rawDefault# [iFound]
-            @emlManagerDeriveLabel: proposal$# [kRow]
+            # Sec. 2 (REVISED): the checkbox label always starts with the
+            # index prefix (identity, sec. 2a) -- middle-shortening only
+            # ever touches the name/suffix that follows it, so the derived
+            # readback variable is unique by construction and the cap
+            # invariant (sec. 2c) holds regardless.
+            @emlManagerIndexPrefix: kRow
+            @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$,
+                ... proposal$# [kRow], "", emlManager_boolLabelCap
+            @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
             boolLabels$# [kRow] = emlManagerDeriveLabel.label$
             derivedNames$# [kRow] = emlManagerDeriveLabel.derived$
         endif
     endfor
 
     # --- Pre-dialog collision check (on PROPOSED names) ---
+    # Sec. 2d: compares the REAL (uncapped) proposed identity, never a
+    # label -- the index prefix already makes derivedNames$# unique by
+    # construction (sec. 2a), so it can no longer signal a genuine name
+    # collision here even if two rows did propose the same name.
 
     for iA from 1 to nKeep
         for iB from iA + 1 to nKeep
-            if derivedNames$# [iA] = derivedNames$# [iB]
+            if proposal$# [iA] = proposal$# [iB]
                 @emlManagerCleanupStaging: stagingPath$
                 exitScript: emlManager_msgCollision$
                     ... + proposal$# [iA] + " and "
@@ -1648,13 +2040,23 @@ if not variableExists ("emlManager_harnessMode")
         endfor
     endfor
 
-    # --- Selection dialog (paginated). Final page carries the literal toggle. ---
+    # --- Selection dialog (paginated by rendered-line budget, item 3).
+    #     Final page carries the literal toggle + its blank spacer -- the
+    #     same budget walk that decides page breaks reserves those 2 lines.
 
-    nPages = ceiling (nKeep / emlManager_pageSize)
+    itemLines# = zero# (nKeep)
+    for iRow from 1 to nKeep
+        @emlManagerWrapText: descLines$# [iRow], emlManager_wrapWidth
+        itemLines# [iRow] = size (emlManagerWrapText.lines$#) + 1
+    endfor
+    @emlManagerPageBudgetWalk: itemLines#, nKeep, emlManager_pageLineBudget, 2
+    nPages = emlManagerPageBudgetWalk.nPages
+    pageStartItem# = emlManagerPageBudgetWalk.pageStartItem#
+    pageEndItem# = emlManagerPageBudgetWalk.pageEndItem#
 
     for iPage from 1 to nPages
-        pageStart = (iPage - 1) * emlManager_pageSize + 1
-        pageEnd = min (iPage * emlManager_pageSize, nKeep)
+        pageStart = pageStartItem# [iPage]
+        pageEnd = pageEndItem# [iPage]
 
         if nPages = 1
             pageTitle$ = emlManager_selTitle$
@@ -1737,13 +2139,18 @@ if not variableExists ("emlManager_harnessMode")
 
     # --- Install loop ---
 
-    summaryLines$# = empty$# (nSelected)
+    # Item 1: a ghost reuse adds a second summary line for the same row (the
+    # normal install line, then the ghost-reused note), so the arrays that
+    # follow summaryIdx are sized to 2 entries per selected row -- a safe
+    # upper bound (every other outcome uses at most 1).
+    summaryCap = max (nSelected * 2, 1)
+    summaryLines$# = empty$# (summaryCap)
     # Item 5: parallel to summaryLines$# -- which rows get an installed-
     # command report (only actual successful installs with a setup.praat)
     # and where to read it from.
-    reportShow# = zero# (nSelected)
-    reportFolder$# = empty$# (nSelected)
-    reportPath$# = empty$# (nSelected)
+    reportShow# = zero# (summaryCap)
+    reportFolder$# = empty$# (summaryCap)
+    reportPath$# = empty$# (summaryCap)
     summaryIdx = 0
     createFolder: archiveDir$
 
@@ -1753,18 +2160,18 @@ if not variableExists ("emlManager_harnessMode")
             litName$ = literal$# [iInst]
             pPath$ = path$# [iInst]
             hadSetup = setupFlags# [iInst]
+            destPath$ = prefsDir$ + "/" + instName$
 
-            wasReplaced = 0
-            archiveOk = 1
-            if folderExists (prefsDir$ + "/" + instName$)
-                @emlManagerArchiveExisting: instName$, prefsDir$, archiveDir$
-                if emlManagerArchiveExisting.ok = 1
-                    wasReplaced = 1
-                else
-                    archiveOk = 0
-                    summaryIdx = summaryIdx + 1
-                    summaryLines$# [summaryIdx] = emlManagerArchiveExisting.message$
-                endif
+            # Item 1: archives an actually-installed collision, or clears a
+            # ghost remnant as fresh ground (no archive) -- see
+            # emlManagerResolveInstallTarget.
+            @emlManagerResolveInstallTarget: destPath$, instName$, prefsDir$, archiveDir$
+            wasReplaced = emlManagerResolveInstallTarget.wasReplaced
+            wasGhostReused = emlManagerResolveInstallTarget.wasGhostReused
+            archiveOk = emlManagerResolveInstallTarget.archiveOk
+            if archiveOk = 0
+                summaryIdx = summaryIdx + 1
+                summaryLines$# [summaryIdx] = emlManagerResolveInstallTarget.preSummary$
             endif
 
             if archiveOk = 1
@@ -1775,18 +2182,18 @@ if not variableExists ("emlManager_harnessMode")
                     summaryLines$# [summaryIdx] = "FAILED: "
                         ... + instName$ + " -- " + emlManagerVerify.message$
                 else
-                    line$ = instName$
-                    if instName$ <> litName$
-                        line$ = line$ + " (" + emlManager_annotRenamedFrom$ + litName$ + ")"
+                    # Item 1 / spec sec. 4: the success line, plus (only when
+                    # placed over a ghost) the reused-leftover note.
+                    @emlManagerBuildInstallSummaryLines: instName$, litName$,
+                        ... wasReplaced, wasGhostReused, prefsDir$
+                    summaryLines$# [summaryIdx] = emlManagerBuildInstallSummaryLines.lines$# [1]
+                    reportShow# [summaryIdx] = emlManagerBuildInstallSummaryLines.reportShow
+                    reportFolder$# [summaryIdx] = emlManagerBuildInstallSummaryLines.reportFolder$
+                    reportPath$# [summaryIdx] = emlManagerBuildInstallSummaryLines.reportPath$
+                    if emlManagerBuildInstallSummaryLines.n = 2
+                        summaryIdx = summaryIdx + 1
+                        summaryLines$# [summaryIdx] = emlManagerBuildInstallSummaryLines.lines$# [2]
                     endif
-                    if wasReplaced = 1
-                        line$ = line$ + emlManager_msgArchiveNote$
-                    endif
-                    summaryLines$# [summaryIdx] = line$
-                    reportShow# [summaryIdx] = 1
-                    reportFolder$# [summaryIdx] = instName$
-                    reportPath$# [summaryIdx] = prefsDir$ + "/" + instName$
-                        ... + "/" + emlManager_setupFile$
                 endif
             endif
         endif
@@ -1800,7 +2207,7 @@ if not variableExists ("emlManager_harnessMode")
     # installed plugin's existing summary line, then -- when it was actually
     # installed -- its "<folder> adds:" header and its wrapped report lines),
     # a second pass to fill it, then display it through the existing
-    # pagination-at-12 machinery.
+    # line-budget pagination (sec. 3, emlManager_pageLineBudget).
     totalLines = 0
     for iSummary from 1 to summaryIdx
         totalLines = totalLines + 1
@@ -1845,10 +2252,21 @@ if not variableExists ("emlManager_harnessMode")
     lineIdx = lineIdx + 1
     allLines$# [lineIdx] = emlManager_msgRestart$
 
-    nCompletePages = ceiling (totalLines / emlManager_pageSize)
+    # Item 3: same line-budget walk as the selection dialog; every entry of
+    # allLines$# is already exactly one rendered line, so each is a
+    # 1-line item and no reserve applies.
+    completeLineWeights# = zero# (totalLines)
+    for iWeight from 1 to totalLines
+        completeLineWeights# [iWeight] = 1
+    endfor
+    @emlManagerPageBudgetWalk: completeLineWeights#, totalLines, emlManager_pageLineBudget, 0
+    nCompletePages = emlManagerPageBudgetWalk.nPages
+    completePageStart# = emlManagerPageBudgetWalk.pageStartItem#
+    completePageEnd# = emlManagerPageBudgetWalk.pageEndItem#
+
     for iCPage from 1 to nCompletePages
-        cPageStart = (iCPage - 1) * emlManager_pageSize + 1
-        cPageEnd = min (iCPage * emlManager_pageSize, totalLines)
+        cPageStart = completePageStart# [iCPage]
+        cPageEnd = completePageEnd# [iCPage]
 
         if nCompletePages = 1
             cPageTitle$ = emlManager_titleComplete$

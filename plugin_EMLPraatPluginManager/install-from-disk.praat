@@ -1079,21 +1079,32 @@ procedure emlManagerScanNameEvidence: .folderPath$, .literal$, .proposal$
         endfor
         .subs$# = folderNames$# (.cur$ + "/*")
         for .si from 1 to size (.subs$#)
-            if .subs$# [.si] <> emlManager_macosxExclude$
-                if .tail >= .cap
-                    .newCap = .cap * 2
-                    .newQ$# = empty$# (.newCap)
-                    .live = .tail - .head + 1
-                    for .k from 0 to .live - 1
-                        .newQ$# [.k + 1] = .q$# [.head + .k]
-                    endfor
-                    .q$# = .newQ$#
-                    .head = 1
-                    .tail = .live
-                    .cap = .newCap
+            .subName$ = .subs$# [.si]
+            if .subName$ <> emlManager_macosxExclude$
+                # SPEC_SCAN_OPTIMIZATION sec. Fix 3: a subfolder whose NAME is
+                # itself a candidate (per emlManagerIsCandidateName) is not
+                # enqueued -- its whole subtree is excluded from this scan.
+                # That nested candidate gets its own turn in the per-candidate
+                # loop; without this exclusion its scripts referencing its OWN
+                # name would be double-counted as evidence for the ancestor's
+                # name too.
+                @emlManagerIsCandidateName: .subName$
+                if emlManagerIsCandidateName.yes = 0
+                    if .tail >= .cap
+                        .newCap = .cap * 2
+                        .newQ$# = empty$# (.newCap)
+                        .live = .tail - .head + 1
+                        for .k from 0 to .live - 1
+                            .newQ$# [.k + 1] = .q$# [.head + .k]
+                        endfor
+                        .q$# = .newQ$#
+                        .head = 1
+                        .tail = .live
+                        .cap = .newCap
+                    endif
+                    .tail = .tail + 1
+                    .q$# [.tail] = .cur$ + "/" + .subName$
                 endif
-                .tail = .tail + 1
-                .q$# [.tail] = .cur$ + "/" + .subs$# [.si]
             endif
         endfor
     endwhile
@@ -1117,15 +1128,26 @@ procedure emlManagerScanOneFile: .fpath$, .folderPath$, .literal$, .proposal$
     .ncProp = 0
     .ncLit = 0
     if fileReadable (.fpath$)
-        .lines$# = readLinesFromFile$# (.fpath$)
-        for .li from 1 to size (.lines$#)
-            @emlManagerScanOneLine: .lines$# [.li],
-                ... .folderPath$, .literal$, .proposal$
-            .cProp = .cProp + emlManagerScanOneLine.cProp
-            .cLit = .cLit + emlManagerScanOneLine.cLit
-            .ncProp = .ncProp + emlManagerScanOneLine.ncProp
-            .ncLit = .ncLit + emlManagerScanOneLine.ncLit
-        endfor
+        # SPEC_SCAN_OPTIMIZATION sec. Fix 2: whole-file pre-gate. Read the
+        # file once and test for the ASCII substring emlManager_pluginPrefix$
+        # before paying for the per-line loop; a file that never mentions it
+        # cannot contribute evidence. This is an ASCII substring search only,
+        # so it survives whatever decoding readFile$ applies -- the same
+        # decoding readLinesFromFile$# applies below -- and the measured
+        # readFile$ byte-safety caveat (binary/non-ASCII round-tripping,
+        # DRIVE_RECORD 2026-08-31) does not apply here.
+        .content$ = readFile$ (.fpath$)
+        if index (.content$, emlManager_pluginPrefix$) > 0
+            .lines$# = readLinesFromFile$# (.fpath$)
+            for .li from 1 to size (.lines$#)
+                @emlManagerScanOneLine: .lines$# [.li],
+                    ... .folderPath$, .literal$, .proposal$
+                .cProp = .cProp + emlManagerScanOneLine.cProp
+                .cLit = .cLit + emlManagerScanOneLine.cLit
+                .ncProp = .ncProp + emlManagerScanOneLine.ncProp
+                .ncLit = .ncLit + emlManagerScanOneLine.ncLit
+            endfor
+        endif
     endif
 endproc
 
@@ -1924,8 +1946,21 @@ if not variableExists ("emlManager_harnessMode")
         # heuristic proposal (no content evidence), then the real content scan
         @emlManagerCanonicalName: litName$, hasSetup, "none"
         heurName$ = emlManagerCanonicalName.proposal$
-        @emlManagerScanNameEvidence: fPath$, litName$, heurName$
-        contentRef$ = emlManagerScanNameEvidence.contentRef$
+        heurIsNearMiss = emlManagerCanonicalName.isNearMiss
+
+        # SPEC_SCAN_OPTIMIZATION sec. Fix 1: skip the scan when it cannot
+        # change the outcome. With isNearMiss = 0 and heuristic = literal,
+        # every branch of emlManagerCanonicalName yields proposal$ =
+        # litName$, row$ = "row", renamedFrom$ = "" regardless of
+        # contentRef$ -- the only observable difference would be the
+        # cosmetic "confirmed" annotation, so contentRef$ = "none" stands
+        # in for the scan's result without running it.
+        if heurIsNearMiss = 0 and heurName$ = litName$
+            contentRef$ = "none"
+        else
+            @emlManagerScanNameEvidence: fPath$, litName$, heurName$
+            contentRef$ = emlManagerScanNameEvidence.contentRef$
+        endif
         @emlManagerCanonicalName: litName$, hasSetup, contentRef$
         propName$ = emlManagerCanonicalName.proposal$
         rowKind$ = emlManagerCanonicalName.row$

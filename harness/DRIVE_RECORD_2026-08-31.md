@@ -207,3 +207,177 @@ present-tense rules (measured at Praat 6.6.30 unless otherwise noted):
 - Harness blind spot to guard against: driving work procedures with
   correct arguments proves the procedures, not the main sequence's
   own call sites. Interactive argument-passing needs the GUI drive.
+
+## v0.7.1 -- install scan is gated and bounded (2 September 2026)
+
+Executed from the pinned spec `planning/SPEC_SCAN_OPTIMIZATION.md`
+(Fable, approved by Ian). Three fixes, all inside
+`plugin_EMLPraatPluginManager/install-from-disk.praat`, no other
+source file touched:
+
+- Fix 1 (per-candidate loop, ~line 1946): skip
+  `@emlManagerScanNameEvidence` when `isNearMiss = 0` (from the
+  heuristic `@emlManagerCanonicalName` call) AND the heuristic
+  proposal equals the literal folder name -- every branch of
+  `emlManagerCanonicalName` is then invariant to `contentRef$`, so
+  `contentRef$ = "none"` stands in for the skipped scan's result.
+- Fix 2 (`emlManagerScanOneFile`): read the whole file once with
+  `readFile$` and test `index (.content$, emlManager_pluginPrefix$)
+  > 0` before paying for the per-line loop; a file with zero
+  occurrences of the ASCII substring `plugin_` cannot contribute
+  evidence.
+- Fix 3 (`emlManagerScanNameEvidence`'s BFS enqueue loop): a
+  subfolder is not enqueued when its own NAME is itself a candidate
+  per `@emlManagerIsCandidateName`, at any depth -- that subtree is
+  scanned on the nested candidate's own turn in the per-candidate
+  loop instead.
+
+### Harness
+
+New `harness/run_scan_optimization.praat`, 31/31 real assertions
+(cases 1-6 of the spec). Cases 1, 2, 3 and 5 drive the per-candidate
+loop's Fix 1 site by mirroring it in the harness (same condition,
+same real procedure calls, in the same order) rather than calling it
+directly -- that site lives inside the main sequence, which is
+suppressed under `emlManager_harnessMode` (the same accepted
+blind-spot pattern `run_canonical_names.praat`'s double-zip fixture
+already uses for the sec.6 ancestor-collapse rule). Case 4 proves
+Fix 2's pre-gate changes no counter by comparing the real, gated
+`emlManagerScanNameEvidence` against a reference re-scan that calls
+the real `emlManagerScanOneLine` on every line of the same two files
+without the file-level gate. Case 6 builds a synthetic 15-candidate,
+3-nested-level, ~40-files-per-candidate x ~200-lines fixture (fresh
+each run, not committed) and times the current code's discovery +
+per-candidate pass with `stopwatch`.
+
+### Pinned behavior deltas (accepted by Ian with the shape)
+
+- Skip-gate annotation loss: a row whose folder name is already
+  canonical (not a near-miss, heuristic proposal equals the literal
+  name) no longer shows the "name confirmed by the plugin's own
+  scripts" annotation, because the scan that would confirm it no
+  longer runs. Proposal, disposition (`row$`), and `renamedFrom$`
+  are unchanged -- verified directly: harness case 1 also forces the
+  scan on the same fixture and confirms it would have returned
+  `contentRef$ = "proposal"` (i.e. the annotation is the ONLY
+  casualty). Near-miss rows and rows whose heuristic differs from
+  the literal name are unaffected (cases 2 and 3).
+- Nested-exclusion evidence change: for a candidate that contains a
+  nested candidate folder, Fix 3 can change `contentRef$`. Measured
+  on the spec's own case-5 fixture (`plugin_Outer-main` containing
+  `plugin_Inner/inner.praat`, which mentions `plugin_Inner` heavily
+  and never mentions `plugin_Outer`):
+    - NEW value (current code, Fix 3 applied): `contentRef$ = "none"`.
+    - OLD value (pre-change code, git worktree at parent commit
+      8db0a1e, same literal fixture): ALSO `contentRef$ = "none"`.
+  **Open question / measured discrepancy, not resolved here**: the
+  spec's prose for this case claims "the pre-change code would have
+  found external evidence," predicting a nonzero old value. Measured
+  against the real pre-fix `emlManagerScanNameEvidence` /
+  `emlManagerScanOneLine`, that does not hold for the literal
+  fixture the spec describes: a match only counts toward a
+  candidate's evidence when it is byte-equal to that candidate's OWN
+  `literal$` or `proposal$` (the `.isProp`/`.isLit` test in
+  `emlManagerScanOneLine`), and by the fixture's own construction
+  ("plugin_Outer never" appears in inner.praat) there is no string
+  in the nested file for the old, unexcluded walk to match against
+  Outer's name -- so old and new agree on this exact fixture, and
+  the delta the spec predicts did not materialize. The general
+  mechanism Fix 3's own section describes ("a nested plugin's
+  scripts mentioning its OWN name were being counted as evidence
+  about the PARENT's name") does hold whenever a nested candidate
+  shares its ancestor's exact literal or proposal string (e.g. a
+  double-zip, `plugin_X/plugin_X`) -- just not for two candidates
+  with genuinely different names and no cross-mention, as case 5 is
+  literally written. Flagging for Fable/Ian rather than inventing
+  fixture content (e.g. an actual `plugin_Outer` mention inside
+  inner.praat) the spec did not specify.
+  Commands used: a throwaway probe script building exactly the
+  case-5 fixture and calling the real `emlManagerCanonicalName` /
+  `emlManagerScanNameEvidence` was placed at
+  `harness/probe.praat` (so its relative `include` resolves) once
+  inside `git worktree add /tmp/emlpm_before HEAD` (parent commit
+  8db0a1e, old code) and run with
+  `/root/work/praat-env/praat --run /tmp/emlpm_before/harness/probe.praat`,
+  then placed at the same relative path in the main tree (new code,
+  post Fix 1/2/3) and run with
+  `/root/work/praat-env/praat --run harness/probe.praat` from
+  `/root/work/EMLPluginManager`; both invocations printed
+  `contentRef$ = none`. The worktree was removed afterward
+  (`git worktree remove /tmp/emlpm_before --force`) and both probe
+  copies were deleted -- this probe is not part of the shipped
+  harness suite.
+
+### Timing (case 6)
+
+Fixture: 15 candidate folders (`plugin_Cand01`..`plugin_Cand15`,
+all canonical -- literally the motivating scenario, a source folder
+of plainly-named plugin folders), each 3 levels of nested plain
+subfolders deep (`sub1/sub2/sub3`), 40 `.praat` files per candidate
+(10 per level across the 4 folders), 200 lines each -- 600 files,
+120,000 lines total. 4 of the 40 files per candidate (1 per level)
+contain one `plugin_<CandNN>` mention; the rest contain none.
+Generator: the `emlHarnessGenTimingTree` procedure inlined in both
+`harness/run_scan_optimization.praat` (current code) and a
+throwaway, uncommitted twin placed at
+`/tmp/emlpm_before/harness/run_timing_before.praat` for the "before"
+leg (identical generator text, so both legs build the same fixture).
+
+Commands:
+- Before (pre-change code, parent commit 8db0a1e):
+  `cd /root/work/EMLPluginManager && git worktree add /tmp/emlpm_before HEAD`,
+  then `cd /tmp/emlpm_before && /root/work/praat-env/praat --run harness/run_timing_before.praat`
+  (script timed the OLD per-candidate sequence -- heuristic
+  `emlManagerCanonicalName` call, UNCONDITIONAL
+  `emlManagerScanNameEvidence`, final `emlManagerCanonicalName` call
+  -- with `stopwatch`, over all 15 found candidates), then
+  `cd /root/work/EMLPluginManager && git worktree remove /tmp/emlpm_before --force`.
+  Measured twice for stability: **2.169 s** and **2.202 s**.
+- After (current code, Fix 1/2/3 applied):
+  `cd /root/work/EMLPluginManager/harness && /root/work/praat-env/praat --run run_scan_optimization.praat`
+  (case 6 timed with `stopwatch`, same fixture, same 15 candidates).
+  Measured twice: **0.007 s** both times.
+
+All 15 candidates are canonical by construction, so Fix 1's skip
+gate fires for all of them in the after leg (`scans actually run: 0`
+in the harness output) -- the after number reflects discovery
+(`emlManagerFindPluginDirs`) plus `emlManagerCheckSetupPresent` plus
+two cheap `emlManagerCanonicalName` calls per candidate, with zero
+file reads. Acceptance (spec: after < 1 s) met by a wide margin
+(~300x faster than the measured before number on this fixture).
+
+### Newly measured Praat facts (6.6.30), this round
+
+- `readFile$` followed immediately by `readLinesFromFile$#` on the
+  same file, for a pure-ASCII substring test, sees the same decoded
+  text -- no observed divergence (the previously measured
+  `readFile$` byte-safety caveat is specific to binary/non-ASCII
+  round-tripping, not ASCII substring search; not re-measured here
+  beyond confirming Fix 2's harness case 4 counters match an ungated
+  reference exactly).
+- Vector literals (`v$# = { a$, b$ }`) accept variables, not just
+  string literals, confirmed at 6.6.30.
+- `stopwatch` (no arguments, used as a value) returns elapsed
+  seconds since the previous `stopwatch` call or script start, and
+  resets on each read -- first use in this repo's harnesses.
+
+### Verifier addendum (Fable, 2 Sep) — the real Fix-3 delta, measured
+
+The builder flagged that case 5's spec fixture (differently-named
+nested candidate, no cross-mention) shows no old-vs-new delta and
+declined to manufacture one. Correct call; the spec prose was wrong
+and is amended in place. The genuine polluting construction is a
+SAME-STEM nested candidate, and it is measured, old vs new:
+
+    fixture: /tmp/scanprobe/src/plugin_Outer-main/plugin_Outer/old.praat
+             (stale copy; its text mentions plugin_Outer)
+    drive:   @emlManagerScanNameEvidence: ".../plugin_Outer-main",
+             "plugin_Outer-main", "plugin_Outer"
+    OLD (worktree at 8db0a1e): contentRef=proposal
+    NEW (v0.7.1 working tree):  contentRef=none
+
+Under the old code, a stale copy of a plugin left inside its own
+shipping folder CONFIRMED the parent's proposed name using the stale
+copy's text. Under Fix 3 the nested candidate's subtree is excluded
+and adjudicated on its own turn. Independent verification: all five
+harnesses re-run green by the verifier (34/113/54/23/31, 0 fail).

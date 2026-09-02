@@ -140,6 +140,97 @@ else
 endif
 
 appendInfoLine: ""
+appendInfoLine: "--- generator: part 2 folder-source validation order ---"
+
+check1bRoot$ = scratchRoot$ + "/check1b"
+createFolder: check1bRoot$
+
+createFolder: check1bRoot$ + "/NotAPlugin"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/NotAPlugin"
+if emlManagerCifValidateFolderSource.result$ = "bad_prefix"
+    ... and emlManagerCifValidateFolderSource.name$ = "NotAPlugin"
+    pass = pass + 1
+    appendInfoLine: "PASS: (a) a folder not named plugin_* is refused as 'bad_prefix'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: (a) bad-prefix case -- got result='",
+        ... emlManagerCifValidateFolderSource.result$, "'"
+endif
+
+createFolder: check1bRoot$ + "/plugin_NoSetup"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/plugin_NoSetup"
+if emlManagerCifValidateFolderSource.result$ = "no_setup"
+    pass = pass + 1
+    appendInfoLine: "PASS: (b) a plugin_* folder with no top-level setup.praat is refused as 'no_setup'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: (b) no-setup case -- got result='",
+        ... emlManagerCifValidateFolderSource.result$, "'"
+endif
+
+createFolder: check1bRoot$ + "/BothWrong"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/BothWrong"
+if emlManagerCifValidateFolderSource.result$ = "bad_prefix"
+    pass = pass + 1
+    appendInfoLine: "PASS: validation ORDER -- a folder failing both (a) and (b) reports (a) first"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: validation order -- expected 'bad_prefix' to win, got '",
+        ... emlManagerCifValidateFolderSource.result$, "'"
+endif
+
+createFolder: check1bRoot$ + "/plugin_NonAsciiCaf" + unicode$ (233)
+writeFileLine: check1bRoot$ + "/plugin_NonAsciiCaf" + unicode$ (233) + "/setup.praat", "# ok"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/plugin_NonAsciiCaf" + unicode$ (233)
+if emlManagerCifValidateFolderSource.result$ = "non_ascii"
+    pass = pass + 1
+    appendInfoLine: "PASS: (c) a plugin_* folder with setup.praat but a non-ASCII name is refused as 'non_ascii' -- reaches (c) only after (a) and (b) both pass"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: (c) non-ASCII case -- got result='",
+        ... emlManagerCifValidateFolderSource.result$, "'"
+endif
+
+createFolder: check1bRoot$ + "/plugin_Good"
+writeFileLine: check1bRoot$ + "/plugin_Good/setup.praat", "# ok"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/plugin_Good"
+okCase1 = emlManagerCifValidateFolderSource.result$ = "ok"
+    ... and emlManagerCifValidateFolderSource.name$ = "plugin_Good"
+@emlManagerCifValidateFolderSource: check1bRoot$ + "/plugin_Good/"
+okCase2 = emlManagerCifValidateFolderSource.result$ = "ok"
+    ... and emlManagerCifValidateFolderSource.name$ = "plugin_Good"
+if okCase1 = 1 and okCase2 = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: a valid plugin_* folder (with and without a trailing '/') validates 'ok'"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: valid-folder case -- no-slash ok=", okCase1, " trailing-slash ok=", okCase2
+endif
+
+# The interactive cancel path (chooseFolder$ returning "") cannot be driven
+# headlessly (dialogs silently stop script execution in this build) -- the
+# main sequence's own cancel check is the single inline "chosenFolder$ = """"
+# comparison BEFORE emlManagerCifValidateFolderSource is ever called, so
+# there is no separate procedure-level surface for it; verified instead by
+# the GUI drive (harness/evidence/v072_chooser_*). As the nearest headless
+# proxy, confirm the validator itself does not crash and resolves
+# deterministically on the empty string, in case a future caller ever
+# reaches it without the guard.
+@emlManagerCifValidateFolderSource: ""
+if emlManagerCifValidateFolderSource.result$ = "bad_prefix"
+    ... and emlManagerCifValidateFolderSource.name$ = ""
+    pass = pass + 1
+    appendInfoLine: "PASS: the validator resolves the empty-path edge case deterministically",
+        ... " (result='bad_prefix', name='') -- the real cancel path itself is",
+        ... " the main sequence's own inline check before this procedure is called, GUI-verified"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: empty-path edge case -- got result='",
+        ... emlManagerCifValidateFolderSource.result$, "' name='",
+        ... emlManagerCifValidateFolderSource.name$, "'"
+endif
+
+appendInfoLine: ""
 appendInfoLine: "--- generator: manifest and report-line assembly on the fixture ---"
 
 check3Plugin$ = scratchRoot$ + "/check3/plugin_WrapTest"
@@ -666,6 +757,82 @@ leg2DriverLines$# = {
     ... "    fail = fail + 1",
     ... "    appendInfoLine: ""FAIL: a system-command line interpolates something outside the pinned"",",
     ... "        ... "" components: '"", emlHarnessAuditSystemLines.offender$, ""'""",
+    ... "endif",
+    ... "",
+    ... "appendInfoLine: """"",
+    ... "appendInfoLine: ""--- wrapper runtime: self-install guard condition matrix (part 1) ---""",
+    ... "",
+    ... "guardMatrixOk = 1",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_X"", ""/a/b/plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  equal paths should fire, got "", wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_X/sub/dir"", ""/a/b/plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  wrapper nested under dest should fire, got "", wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_Y"", ""/a/b/plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 0",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  unrelated paths should NOT fire, got "", wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_XY"", ""/a/b/plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 0",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  a same-prefix SIBLING (plugin_XY under plugin_X by naive""",
+    ... "        ... "" substring only) must NOT fire -- got "", wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_X/"", ""/a/b/plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  trailing slash on scriptFolder$ should still fire (equal), got "",",
+    ... "        ... wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""/a/b/plugin_X"", ""/a/b/plugin_X/""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  trailing slash on destPath$ should still fire (equal), got "",",
+    ... "        ... wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""C:\a\b\plugin_X"", ""C:\a\b\plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  backslash-separated equal paths should fire after normalization, got "",",
+    ... "        ... wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""C:\a\b\plugin_X\sub"", ""C:\a\b\plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 1",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  backslash-separated nested-under-dest should fire, got "",",
+    ... "        ... wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "@wrapCheckSelfInstall: ""C:\a\b\plugin_Y"", ""C:\a\b\plugin_X""",
+    ... "if wrapCheckSelfInstall.fires <> 0",
+    ... "    guardMatrixOk = 0",
+    ... "    appendInfoLine: ""  backslash-separated unrelated paths should NOT fire, got "",",
+    ... "        ... wrapCheckSelfInstall.fires",
+    ... "endif",
+    ... "",
+    ... "if guardMatrixOk = 1",
+    ... "    pass = pass + 1",
+    ... "    appendInfoLine: ""PASS: the self-install guard condition matrix -- equal paths,"",",
+    ... "        ... "" wrapper nested under dest, unrelated paths, a same-prefix sibling,"",",
+    ... "        ... "" trailing-slash normalization (both sides), and backslash normalization"",",
+    ... "        ... "" (both equal and nested) -- all fire/do-not-fire exactly as pinned""",
+    ... "else",
+    ... "    fail = fail + 1",
+    ... "    appendInfoLine: ""FAIL: self-install guard condition matrix mismatch (see above)""",
     ... "endif",
     ... "",
     ... "appendInfoLine: """"",

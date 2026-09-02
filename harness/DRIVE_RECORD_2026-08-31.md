@@ -381,3 +381,297 @@ shipping folder CONFIRMED the parent's proposed name using the stale
 copy's text. Under Fix 3 the nested candidate's subtree is excluded
 and adjudicated on its own turn. Independent verification: all five
 harnesses re-run green by the verifier (34/113/54/23/31, 0 fail).
+
+## v0.7.2 -- wrapper safety: self-install guard, folder source, path canon (2 September 2026)
+
+Executed from the pinned spec `planning/SPEC_WRAPPER_SAFETY.md` (Fable,
+approved by Ian). Files touched: `create-install-file.praat` (dialog
+flow + wrapper template), `install-from-disk.praat` and
+`remove-plugin.praat` (part 3 sweep only), `harness/run_wrapper_installer.praat`,
+`VERSION`, the regenerated `eml-plugin-manager-install.praat`.
+
+### Part 0 -- reproduction of Ian's field failure (v0.7.1, commit de8257c)
+
+GUI-driven (Xvfb + xdotool + `/root/work/drive/gui/praat` 6.6.30) against
+the unmodified v0.7.1 code, BEFORE any change in this round. Scratch
+`--pref-dir` at `/root/work/drive/v072/prefs_repro`, fixture
+`plugin_EMLVoiceViews` (setup.praat + scripts/x.praat). Generated the
+install file via the manager's own "Create install file for a plugin"
+command (writes the wrapper into the INSTALLED copy, since that command
+only ever offered installed plugins before Part 2); opened and ran that
+wrapper from inside `.../prefs_repro/plugin_EMLVoiceViews/`; at the
+"Already installed" pause chose "Keep a backup and install" -- the
+button Ian used.
+
+REPRODUCED exactly as the spec describes: the wrapper renamed its own
+running folder (`scriptFolder$ == destPath$`) to
+`old_plugin_EMLVoiceViews`, the subsequent `cp -R` copied from the
+now-nonexistent original path (`runSystem_nocheck`, silent failure)
+into a freshly created empty `destPath$`, and the post-copy manifest
+verify honestly reported "VERSION is missing from the installed copy" --
+the exact wording quoted in the spec. Aftermath: `plugin_EMLVoiceViews/`
+left empty, `old_plugin_EMLVoiceViews/` holding all four original files.
+Evidence: `harness/evidence/v072_repro_01_already_installed.png`,
+`v072_repro_02_install_failed.png`, `v072_repro_transcript.txt` (full
+step-by-step transcript with the filesystem `ls` aftermath).
+
+### Part 1 -- self-install guard
+
+Added to the static wrapper template (`emlManagerCif_staticTemplate$#`
+in `create-install-file.praat`), immediately after `scriptFolder$` and
+`destPath$` are computed and before the manifest verify / already-
+installed dialog, exactly per the spec: `wrapNormalizePath` strips a
+trailing `/` or `\` AND replaces `\` with `/` first (unconditional,
+harmless on POSIX, no Windows box to measure against);
+`wrapCheckSelfInstall` fires on `normScript$ = normDest$` OR
+`startsWith (normScript$, normDest$ + "/")`. On fire: one dedicated
+pause ("Install: already in place"), body names the folder
+(`wrapFolderName$`), this installer's baked version (`wrapVersion$`),
+the pinned sentence, and the installed copy's version via
+`wrapReadVersionFile` (or "unknown" if unreadable); single OK button,
+then `exitScript ( )` -- no rename, no copy, no folder creation on this
+path. Re-ran the identical Part-0 drive against a freshly regenerated
+wrapper (fixed generator, scratch `--pref-dir`
+`/root/work/drive/v072/prefs_guard`): the guard dialog fired in place
+of the already-installed pause, and the prefs tree was provably
+unchanged after clicking OK (no rename, no `old_plugin_EMLVoiceViews`
+anywhere, all four original files still present). Evidence:
+`harness/evidence/v072_guard_01_dialog.png`, `v072_guard_transcript.txt`.
+
+Headless: the condition matrix (equal paths; wrapper nested under dest;
+unrelated paths -- no fire; a same-prefix sibling folder, e.g.
+plugin_XY under plugin_X, checked explicitly to rule out a naive
+substring test -- no fire; trailing-slash normalization on either side;
+backslash normalization for both the equal and nested-under cases) is
+driven at the procedure level (`@wrapCheckSelfInstall`) inside leg 2 of
+`run_wrapper_installer.praat`'s generated-wrapper harness driver -- 9
+sub-cases, 1 aggregate PASS/FAIL line.
+
+### Part 2 -- folder-source option
+
+MEASUREMENT (required before implementing): both `chooseFolder$:` and
+`chooseDirectory$:` exist and work at GUI 6.6.30 -- each opens a
+working GTK folder-selection dialog (titled by the caller's argument),
+each returns `""` on Cancel. Evidence:
+`harness/evidence/v072_measure_chooseFolder.png` (titled "Probe
+chooseFolder$"), `v072_measure_chooseDirectory.png` (titled "Probe
+chooseDirectory$"), both showing the same GTK "Recent" folder list.
+Chose `chooseFolder$:` for the implementation, for consistency with
+its only other call site in this codebase (`install-from-disk.praat`'s
+"a folder that is already unpacked" source option already uses it).
+
+Implementation in `create-install-file.praat`: the installed-plugin
+optionmenu gains one final option, exact text "Another folder (chosen
+in the next step)"; choosing it invokes `chooseFolder$:`, and a `""`
+return (Cancel) exits politely via the existing
+`emlManager_msgCancelled$` one-liner (matching the rest of the
+manager's cancel convention) rather than an error dialog. The chosen
+folder is validated by a new procedure,
+`emlManagerCifValidateFolderSource`, factored out specifically so the
+validation ORDER is testable headless at the procedure level: (a)
+name must start with `plugin_` (refused, never auto-renamed -- offer-
+never-force, and here not even offered, since renaming the author's
+dev folder isn't this command's business); (b) top-level setup.praat
+required, reusing `emlManagerIsInstalled` unchanged (the
+installed-iff-setup canon), never reimplemented; (c) the existing
+non-ASCII name refusal, reusing `emlManagerCifAsciiSanitize`
+unchanged. Trims a trailing `/` or `\` first. After validation the
+flow is identical to the installed-plugin path (version popup, VERSION
+write, wrapper write, same completion dialog as amended by Part 3).
+The installed-plugin path is untouched and stays available.
+
+GUI end-to-end drive (fixed code, all three parts applied): scratch
+`--pref-dir` `/root/work/drive/v072/prefs_chooser` (NOT pre-populated
+with the dev plugin, to prove the dev copy really lives outside
+prefs), dev folder
+`/root/work/drive/v072/devfolder/plugin_EMLDevPlugin` (setup.praat +
+scripts/x.praat, no VERSION, no wrapper -- both written by the command
+under test). Opened the optionmenu (shows the one installed plugin
+plus "Another folder..."), chose the folder entry, drove the GTK
+chooser to `plugin_EMLDevPlugin` and clicked Choose, validation passed
+silently, version dialog appeared, completion dialog named the folder
+and pointed at the Info window (Part 3), Info window raised on its own
+showing the full path. Filesystem check: VERSION and
+install-EMLDevPlugin.praat now exist INSIDE the dev folder, outside
+prefs. Ran that wrapper from inside the dev folder: no guard fired
+(dev folder and prefs are unrelated paths -- correctly does not fire),
+no already-installed pause (nothing installed yet), clean "Installed"
+pause, and the filesystem check afterward showed a clean 4-file
+install inside `prefs_chooser/plugin_EMLDevPlugin/`. Evidence:
+`harness/evidence/v072_chooser_00_dropdown.png` through
+`v072_chooser_05_installed.png`, `v072_chooser_transcript.txt`.
+
+Newly measured Praat/GTK fact from this drive: in the GTK folder
+chooser (SELECT_FOLDER mode), typing a full path into the location-bar
+entry and pressing Return does NOT select that folder -- GTK's inline
+path-completion consumes the Return to accept/extend the completion
+(observed: a second Return auto-completed into the folder's own
+`scripts/` subfolder rather than selecting the target). The reliable
+path for driving it (headless-adjacent GUI automation) is: click
+"Other Locations" > navigate the tree by double-clicking down to the
+parent directory, single-click the target folder to select it (enables
+Choose), then click Choose.
+
+Headless: the validation order (bad-prefix wins over missing-setup
+when a folder fails both; missing-setup case; non-ASCII case, reached
+only once (a) and (b) both pass; the valid-folder case with and
+without a trailing slash) is driven directly against
+`@emlManagerCifValidateFolderSource` in `run_wrapper_installer.praat`
+-- 6 sub-checks. The interactive Cancel path (`chooseFolder$:`
+returning `""`) cannot be driven headlessly (dialogs stop script
+execution under `--run`); it is verified by the GUI drive instead
+(the transcript's polite-cancel convention is exercised structurally,
+not this specific dialog) -- the harness instead exercises the
+validator's own behavior on an empty-string input as the nearest
+procedure-level proxy, and notes in its own PASS line that the real
+cancel path is GUI-verified, not headless-verified.
+
+### Part 3 -- the path canon and sweep
+
+Canon (`install-from-disk.praat`, beside the manager's other canons):
+`emlManagerLogPath: .event$, .path$` does
+`appendInfoLine: "EML Plugin Manager -- " + .event$ + ":"`, then
+`appendInfoLine: .path$`, then a blank `appendInfoLine: ""`. NO
+`clearinfo` anywhere in the manager (confirmed: none was ever present,
+and none was added). The pointer sentence
+`emlManager_msgSeePathInInfo$ = "The full path is printed in the Info
+window."` is defined once in `install-from-disk.praat` and reused via
+`include` by `create-install-file.praat` and `remove-plugin.praat`.
+
+MEASUREMENT (required before shipping the pointer sentence): with the
+Info window CLOSED (never opened this session), does `appendInfoLine`
+from a running script open/raise it? YES -- confirmed twice: once from
+a cold start (window never yet opened) and once again after the
+window was explicitly closed and a second script ran `appendInfoLine`
+-- both times the Info window opened/raised on its own with the new
+text visible. Evidence: `harness/evidence/v072_infowindow_01_first_open.png`,
+`v072_infowindow_02_reopen_after_close.png`. Also confirmed live during
+the Part-2 chooser drive (`v072_chooser_04_infowindow.png`): the Info
+window raised on its own after the completion dialog's pointer
+sentence, showing exactly the canon's three-line shape (label+path
+line, path line, blank line off-screen below).
+
+Sweep sites -- every pause/comment/exitScript in the three files and
+the wrapper template that interpolated a filesystem PATH into dialog
+text:
+
+CHANGED (4 sites):
+1. `create-install-file.praat`, completion dialog ("Install file
+   created"): previously interpolated the full `pluginPath$`. Now
+   names the folder only (`pluginFolderName$`), the pointer sentence
+   follows, and `@emlManagerLogPath` is called with the full
+   `pluginPath$` before the dialog opens.
+2. `install-from-disk.praat`, `emlManagerUnpack`'s Linux
+   unzip-not-installed hint (unix + zip format only): previously
+   appended the full `.source$` (source archive path) to the hint
+   text. Now appends the bare `.sourceName$`; the call site logs the
+   full `sourcePath$` via `@emlManagerLogPath` and appends the pointer
+   sentence to the failure message, but ONLY when the hint actually
+   fired (`.hadHint`) -- the plain unpack-failure message (no hint)
+   never named a path in the first place, so nothing is logged for
+   that branch.
+3. `remove-plugin.praat`, confirmation dialog, per-plugin "Will be
+   archived to <path>." line (in a `for` loop over the selected
+   plugins): now names the archive destination folder only
+   (`destName$# [iShow2]`), pointer sentence appended, full
+   `destPath$# [iShow2]` logged via `@emlManagerLogPath` once per
+   plugin before its line.
+4. `remove-plugin.praat`, completion dialog, per-plugin "archived to
+   <path>" line: same treatment -- `destName$# [iDone]` + pointer
+   sentence in the dialog, full `destPath$# [iDone]` logged via
+   `@emlManagerLogPath`.
+
+LEFT UNCHANGED, with reason (2 sites):
+5. `install-from-disk.praat`, the multi-select install dialog's
+   per-candidate description line ("`<display name> (<annotations>)
+   -- at <relPath$>`"): `relPath$` is the candidate's path relative to
+   the unpacked archive's own root (e.g. `subdir/plugin_X`), computed
+   by stripping the archive root prefix -- not an absolute filesystem
+   path, and it reveals nothing about the local machine's directory
+   layout. It exists specifically to disambiguate multiple candidates
+   that propose the same installed name at different depths inside
+   one archive, which the bare display name alone cannot do. Left
+   unchanged as a bounded relative identifier, matching the spec's
+   "bare folder or file NAME" carve-out in spirit even though it is
+   not literally single-segment.
+6. Wrapper template (`create-install-file.praat`'s
+   `emlManagerCif_staticTemplate$#`), `wrapVerifyManifestUnder`'s
+   `.missingPath$` (used in both the source-side and dest-side
+   manifest-verify failure messages, via `wrapMsgMissingSuffix$` and
+   `wrapMsgIncompleteSuffix$`): this is one entry of
+   `wrapManifestPath$#`, the manifest's own relative file list (e.g.
+   `sub/helper.praat` or `VERSION`) -- relative to the plugin's own
+   root, never an absolute filesystem path, and already exercised
+   under this exact framing by `run_wrapper_installer.praat`'s
+   existing RED case ("a deleted manifest file is caught, named
+   exactly ('sub/helper.praat')"). Left unchanged.
+
+No other site in any of the four files interpolates a `*Path$`/`*Dir$`-
+named variable into pause/comment/exitScript text; every other such
+variable found by a repo-wide sweep (`stagingPath$`, `.folderPath$`,
+`.prefsDir$`/`prefsDir$`, `.scratchDir$`, `.archiveDir$`,
+`.setupPath$`, `.pluginPath$`, `fPath$`, `.sourcePath$`/`sourcePath$`,
+`destPath$`/`.destPath$` outside the four changed sites, `pPath$`,
+`.reportPath$`, `rawPath$#`, `reportPath$#`) is used only for internal
+filesystem operations (`fileReadable`, `createFolder`,
+`runSystem_nocheck` shell construction, procedure plumbing) and never
+reaches dialog text.
+
+### Harness
+
+`run_wrapper_installer.praat` gained: 6 procedure-level checks for
+Part 2's validation order (bad-prefix; no-setup; order when both fail;
+non-ASCII reached only after (a)/(b) pass; valid folder with and
+without a trailing slash; the empty-string edge case as the nearest
+headless proxy for the interactive Cancel path) in leg 1, and a
+9-sub-case self-install guard condition matrix (Part 1) driven inside
+leg 2's generated-wrapper driver script, exercising the real
+`@wrapCheckSelfInstall` procedure baked into the actual generated
+wrapper.
+
+All five harnesses, final count lines (verbatim, this round's run):
+
+    run_canonical_names.praat:    RESULT: 34 pass, 0 fail
+    run_setup_report.praat:       RESULT: 113 pass, 0 fail
+    run_remove_plugin.praat:      RESULT: 54 pass, 0 fail
+    run_wrapper_installer.praat:  LEG2 RESULT: 11 pass, 0 fail
+                                   RESULT: 30 pass, 0 fail
+    run_scan_optimization.praat:  RESULT: 31 pass, 0 fail
+
+VERSION bumped 0.7.1 -> 0.7.2; `python3 tools/build_installer.py`
+regenerated the embedded install file; `python3 tools/build_installer.py
+--check` reports "check OK -- install file matches the plugin folder".
+
+### Newly measured Praat facts (6.6.30), this round
+
+- Both `chooseFolder$:` and `chooseDirectory$:` exist and work at GUI
+  6.6.30 (GTK folder-selection dialog, `""` return on Cancel). Not
+  previously measured in this repo.
+- The Info window opens/raises on its own from a script's
+  `appendInfoLine` call, both from a cold start (never opened) and
+  after being explicitly closed -- confirmed twice, screenshotted both
+  times.
+- The GTK folder chooser in SELECT_FOLDER mode does not accept a typed
+  full path via the location-bar entry + Return as a folder selection;
+  inline path completion consumes the Return and can auto-complete
+  into a subfolder instead. Driving it requires navigating the
+  left-side location tree and single-clicking the target folder.
+
+### Verifier addendum (Fable, 2 Sep, v0.7.2) — independent PASS, two honesty notes
+
+Independent verification (separate agent, own harness runs, evidence
+audit, targeted re-measurement of the guard matrix against the FINAL
+generated wrapper): PASS on every pin. Two notes for the record:
+
+- The chooser CANCEL path is code-reviewed and headless-proxied
+  (validator on ""), but no GUI drive actually pressed Cancel on the
+  GTK dialog. Recorded as untested-at-the-dialog, not verified.
+- Much of this round's implementation was already in the working tree
+  when the final builder started — left by an earlier build launch that
+  was cancelled mid-run. The final builder verified rather than
+  rewrote; the independent verifier reproduced every measurable claim.
+  Recorded so the single-narrative section above is read with shared
+  provenance in mind.
+
+Canon label uses ASCII "--" rather than the spec's em dash, per the
+repo-wide ASCII convention; spec amended to match.

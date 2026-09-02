@@ -153,6 +153,13 @@ emlManager_msgRestart$ = "Restart Praat to activate."
 emlManager_msgArchiveNote$ = " (previous version kept in the archive folder)"
 emlManager_msgStagingFail$ = "Failed to create staging folder."
 
+# SPEC_WRAPPER_SAFETY part 3: the path canon -- a dialog line names a file or
+# folder but never prints a full filesystem path; every site that would have
+# printed one instead appends this pointer sentence and routes the real path
+# through emlManagerLogPath (below) into the Info window.
+emlManager_msgSeePathInInfo$ = "The full path is printed in the Info window."
+emlManager_logEventUnpackSource$ = "Could not unpack"
+
 emlManager_annotNoCommands$ = "registers no commands"
 emlManager_annotNoSetup$ = "no setup.praat -- not a functioning plugin as-is"
 
@@ -197,6 +204,16 @@ emlManager_msgNext$ = "Next"
 
 procedure emlManagerVersionOk
     .ok = praatVersion >= emlManager_floorVersion
+endproc
+
+# ----------------------------------------------------------------------------
+# SPEC_WRAPPER_SAFETY part 3 canon: prints a full filesystem PATH to the Info
+# window rather than into a dialog. NO clearinfo anywhere in the manager --
+# this appends under whatever the user's Info window already holds.
+procedure emlManagerLogPath: .event$, .path$
+    appendInfoLine: "EML Plugin Manager -- " + .event$ + ":"
+    appendInfoLine: .path$
+    appendInfoLine: ""
 endproc
 
 # ----------------------------------------------------------------------------
@@ -804,9 +821,10 @@ procedure emlManagerCleanupStaging: .path$
 endproc
 
 # ----------------------------------------------------------------------------
-procedure emlManagerUnpack: .format$, .source$, .dest$
+procedure emlManagerUnpack: .format$, .sourceName$, .source$, .dest$
     .ok = 0
     .message$ = ""
+    .hadHint = 0
     .q$ = """"
     createFolder: .dest$
     if macintosh
@@ -835,7 +853,8 @@ procedure emlManagerUnpack: .format$, .source$, .dest$
     else
         .message$ = emlManager_msgUnpackFail$
         if unix and .format$ = "zip"
-            .message$ = .message$ + emlManager_msgLinuxUnzipHint$ + .source$
+            .hadHint = 1
+            .message$ = .message$ + emlManager_msgLinuxUnzipHint$ + .sourceName$
         endif
     endif
 endproc
@@ -1887,9 +1906,13 @@ if not variableExists ("emlManager_harnessMode")
             exitScript: emlManager_msgBadExt$ + sourceName$
         endif
         unpackDest$ = stagingPath$ + "/unpacked"
-        @emlManagerUnpack: format$, sourcePath$, unpackDest$
+        @emlManagerUnpack: format$, sourceName$, sourcePath$, unpackDest$
         if emlManagerUnpack.ok = 0
             failMsg$ = emlManagerUnpack.message$
+            if emlManagerUnpack.hadHint = 1
+                @emlManagerLogPath: emlManager_logEventUnpackSource$, sourcePath$
+                failMsg$ = failMsg$ + " " + emlManager_msgSeePathInInfo$
+            endif
             @emlManagerCleanupStaging: stagingPath$
             exitScript: failMsg$
         endif

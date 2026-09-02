@@ -1,0 +1,76 @@
+Part 2 acceptance transcript -- folder-source ("Another folder") end-to-end
+GUI drive, against the FIXED code (Parts 1/2/3 all applied). Date: 2
+September 2026. Same GUI/Xvfb setup as Parts 0/1.
+
+Scratch --pref-dir: /root/work/drive/v072/prefs_chooser (fresh copy of the
+FIXED plugin_EMLPraatPluginManager only -- NOT pre-populated with the dev
+plugin, to prove the dev copy really lives outside prefs).
+
+Dev folder (outside prefs, the author's dev copy):
+  /root/work/drive/v072/devfolder/plugin_EMLDevPlugin/setup.praat
+  /root/work/drive/v072/devfolder/plugin_EMLDevPlugin/scripts/x.praat
+(no VERSION, no wrapper -- both are written by the command under test)
+
+Steps driven:
+ 1. Launched: /root/work/drive/gui/praat --pref-dir=/root/work/drive/v072/prefs_chooser
+ 2. Praat Objects window > Praat menu > "EML Plugin Manager: Create install
+    file for a plugin...".
+ 3. Dialog "Create install file for a plugin": Plugin dropdown opened
+    (v072_chooser_00_dropdown.png) -- shows the ONE installed plugin
+    (plugin_EMLPraatPluginManager) plus the new final entry "Another folder
+    (chosen in the next step)". Selected the folder entry; Continue.
+ 4. GTK "Select the plugin folder" chooser opened (chooseFolder$: --
+    confirms the Part-2 measurement). Browsed via Other Locations > Computer
+    > root > work > drive > v072 > devfolder, single-clicked
+    plugin_EMLDevPlugin to select it (v072_chooser_01_folder_selected.png,
+    Choose enabled), clicked Choose.
+ 5. Validation passed silently (folder name starts with plugin_, has a
+    top-level setup.praat, ASCII name) -- flow proceeded straight to the
+    version dialog exactly as the installed-plugin path does
+    (v072_chooser_02_version_dialog.png), left at the prefilled default
+    1.0.0, Continue.
+ 6. Completion dialog (v072_chooser_03_complete.png):
+      Wrote install-EMLDevPlugin.praat to plugin_EMLDevPlugin.
+      The full path is printed in the Info window.
+      4 files listed in its manifest.
+      ...
+    -- confirms the Part-3 sweep's pointer sentence at this site. The Info
+    window (v072_chooser_04_infowindow.png) opened/raised on its own,
+    showing:
+      EML Plugin Manager -- Wrote install file to:
+      /root/work/drive/v072/devfolder/plugin_EMLDevPlugin
+    exactly the emlManagerLogPath canon (label line, path line, blank
+    line -- blank line off-screen below).
+ 7. Filesystem check: VERSION and install-EMLDevPlugin.praat now exist
+    inside /root/work/drive/v072/devfolder/plugin_EMLDevPlugin -- the
+    wrapper was written INTO THE DEV FOLDER, outside prefsDir$, exactly as
+    Part 2 requires.
+ 8. Praat menu > Open Praat script...; navigated to
+    /root/work/drive/v072/devfolder/plugin_EMLDevPlugin/install-EMLDevPlugin.praat,
+    Open. Script editor > Run > Run.
+ 9. Pause "Installed" appeared (v072_chooser_05_installed.png):
+      plugin_EMLDevPlugin version 1.0.0 installed.
+      Adds "EML Dev Plugin: Demo..." to the Praat menu in the Objects
+      window.
+      Restart Praat.
+    -- a clean install: no self-install guard fired (scriptFolder$ under
+    devfolder$, destPath$ under prefs_chooser -- unrelated paths, correctly
+    does NOT fire), no already-installed pause (nothing was installed yet).
+10. Filesystem check after clicking OK:
+      /root/work/drive/v072/prefs_chooser/plugin_EMLDevPlugin/
+        VERSION, install-EMLDevPlugin.praat, scripts/x.praat, setup.praat
+    -- a clean install into prefs, 4 files, matching the manifest.
+
+ACCEPTANCE MET: the chooser path (dev folder outside prefs -> validated ->
+wrapper written there -> run from there -> clean install into prefs) works
+end to end against the shipped v0.7.2 code.
+
+Note on driving the GTK folder chooser headlessly: typing a full path into
+the chooser's location-bar entry and pressing Return does NOT select a
+folder in SELECT_FOLDER mode -- GTK's inline path completion consumes the
+Return to accept/extend the completion (observed: it auto-completed into
+the folder's own subfolder, "scripts/", on the second Return), never
+enabling Choose. The reliable path is: Other Locations > Computer, then
+double-click down the tree to the parent directory, single-click the
+target folder to select it (Choose enables), then click Choose. This is a
+newly measured Praat/GTK fact for GUI 6.6.30, recorded in DRIVE_RECORD.

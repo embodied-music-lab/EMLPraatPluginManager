@@ -1,0 +1,72 @@
+Part 0 reproduction transcript -- Ian's field failure, v0.7.1 code (commit de8257c)
+Date: 2 September 2026. GUI Praat 6.6.30 (/root/work/drive/gui/praat), Xvfb :50,
+openbox + xcompmgr, driven with xdotool.
+
+Scratch --pref-dir: /root/work/drive/v072/prefs_repro
+Contents before the drive:
+  plugin_EMLPraatPluginManager/   (copy of the manager itself, so its menu
+                                    commands are registered)
+  plugin_EMLVoiceViews/setup.praat            (fixture, 1 menu command)
+  plugin_EMLVoiceViews/scripts/x.praat        (fixture script)
+
+Steps driven:
+ 1. Launched: /root/work/drive/gui/praat --pref-dir=/root/work/drive/v072/prefs_repro
+ 2. Praat Objects window > Praat menu > "EML Plugin Manager: Create install
+    file for a plugin..." (the manager's own command path, registered by
+    plugin_EMLPraatPluginManager/setup.praat).
+ 3. Dialog "Create install file for a plugin": Plugin dropdown defaulted to
+    plugin_EMLPraatPluginManager (alphabetically first); changed to
+    plugin_EMLVoiceViews; Continue.
+ 4. Dialog "Version": left at the prefilled default 1.0.0; Continue.
+ 5. Dialog "Install file created": "Wrote install-EMLVoiceViews.praat to
+    /root/work/drive/v072/prefs_repro/plugin_EMLVoiceViews. 4 files listed
+    in its manifest." -- OK.
+    (Note: this dialog line interpolates the full absolute pluginPath$ --
+    the exact Part-3 sweep site identified in create-install-file.praat.)
+ 6. Praat menu > Open Praat script...; typed the full path to the just-
+    generated wrapper:
+    /root/work/drive/v072/prefs_repro/plugin_EMLVoiceViews/install-EMLVoiceViews.praat
+    -- Open. This is "running the wrapper from inside the installed copy",
+    exactly Ian's scenario: the wrapper's own defaultDirectory$ at run time
+    IS the installed destination folder.
+ 7. Script editor > Run > Run.
+ 8. Pause "Already installed" appeared (v072_repro_01_already_installed.png):
+      Installed version: 1.0.0
+      This installer's version: 1.0.0
+      Same version.
+      The current copy is renamed to old_plugin_EMLVoiceViews. Praat
+      ignores folders that do not start with plugin_; delete it by hand
+      when you no longer want it.
+      [ ] Delete the installed copy instead
+      The installed copy is deleted, not archived. The EML Plugin Manager
+      archives before replacing.
+    Buttons: Quit / Keep a backup and install.
+ 9. Clicked "Keep a backup and install" (the button Ian used, per the spec's
+    account -- "chose to proceed at the already-installed dialog").
+10. Pause "Install failed" appeared (v072_repro_02_install_failed.png):
+      VERSION is missing from the installed copy. The copy is incomplete
+      and may be deleted by hand.
+    -- the EXACT wording quoted in SPEC_WRAPPER_SAFETY.md's motivating
+    account of Ian's failure. Clicked OK.
+
+Filesystem aftermath (ls -la), captured immediately after step 10:
+
+  /root/work/drive/v072/prefs_repro/plugin_EMLVoiceViews/   <- EMPTY
+    (only . and ..)
+
+  /root/work/drive/v072/prefs_repro/old_plugin_EMLVoiceViews/  <- holds everything
+    VERSION
+    install-EMLVoiceViews.praat
+    scripts/
+    setup.praat
+
+Mechanism confirmed exactly as the spec describes: the wrapper renamed its
+OWN running folder (scriptFolder$ == destPath$) to old_plugin_EMLVoiceViews
+first; the subsequent `cp -R` in wrapDoPlace then copied FROM that
+now-nonexistent original scriptFolder$ path (runSystem_nocheck, silent
+failure) INTO a freshly created, empty destPath$; the post-copy manifest
+verify honestly caught the resulting empty destination and reported the
+first missing manifest entry alphabetically ("VERSION").
+
+REPRODUCTION: CONFIRMED against v0.7.1 (commit de8257c), before any code
+change in this round.

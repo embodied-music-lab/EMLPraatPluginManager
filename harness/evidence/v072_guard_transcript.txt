@@ -1,0 +1,36 @@
+Part 1 acceptance transcript -- guard re-run of Part 0's drive, against the
+FIXED generator (Part 1 change applied, Part 2/3 not yet applied at time of
+this drive). Date: 2 September 2026. Same GUI/Xvfb setup as the Part 0 repro.
+
+Scratch --pref-dir: /root/work/drive/v072/prefs_guard (fresh copy of the
+FIXED plugin_EMLPraatPluginManager plus the same plugin_EMLVoiceViews
+fixture used in Part 0).
+
+Steps: identical to the Part 0 transcript through "Wrote
+install-EMLVoiceViews.praat to .../plugin_EMLVoiceViews.", then opened and
+ran that wrapper from inside its own installed folder exactly as before.
+
+Result (v072_guard_01_dialog.png): instead of the "Already installed" pause,
+the NEW guard dialog fired:
+
+  Pause: Install: already in place
+    Folder: plugin_EMLVoiceViews
+    This installer's version: 1.0.0
+    This install file is running from inside the installed copy itself, so
+    there is nothing to install.
+    Installed version: 1.0.0
+  [OK]  (single button, no Quit/Keep-a-backup choice, no side-effect path)
+
+Clicked OK. Filesystem check immediately after:
+
+  /root/work/drive/v072/prefs_guard/
+    plugin_EMLPraatPluginManager/   (untouched)
+    plugin_EMLVoiceViews/           (untouched: VERSION, install-EMLVoiceViews.praat,
+                                      scripts/x.praat, setup.praat -- all 4
+                                      original files still present, no rename,
+                                      no re-copy)
+  No old_plugin_EMLVoiceViews folder exists anywhere in the prefs dir.
+
+ACCEPTANCE MET: the guard dialog appears in place of the already-installed
+dialog, and the prefs tree is provably unchanged (no rename, no copy, no
+folder creation) -- exactly the pinned Part 1 behavior.

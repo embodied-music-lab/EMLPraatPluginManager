@@ -72,6 +72,26 @@ emlManagerCif_wrapperPrefix$ = "install-"
 emlManagerCif_wrapperExt$ = ".praat"
 emlManagerCif_oldPrefix$ = "old_"
 
+# SPEC_WRAPPER_SAFETY part 2: the folder-source option. The optionmenu's
+# final entry (exact text pinned by the spec) routes to a folder chooser
+# instead of prefsDir$; MEASURED at GUI 6.6.30 (both chooseFolder$: and
+# chooseDirectory$: exist and open a working GTK folder picker, both return
+# "" on Cancel -- chooseFolder$: is used here for consistency with its only
+# other call site in this codebase, install-from-disk.praat's own "a folder
+# that is already unpacked" source option).
+emlManagerCif_anotherFolderLabel$ = "Another folder (chosen in the next step)"
+emlManagerCif_chooseFolderTitle$ = "Select the plugin folder"
+emlManagerCif_titleBadFolderName$ = "Not a plugin folder"
+emlManagerCif_msgBadFolderNamePrefix$ = "Praat only activates folders whose name starts with plugin_. This folder is named """
+emlManagerCif_msgBadFolderNameSuffix$ = """; rename it to start with plugin_ and try again."
+emlManagerCif_titleNoSetup$ = "No setup.praat found"
+emlManagerCif_msgNoSetupPrefix$ = "An install file describes a plugin, and """
+emlManagerCif_msgNoSetupSuffix$ = """ has no setup.praat at its top level."
+
+# SPEC_WRAPPER_SAFETY part 3 sweep: the completion dialog names the folder
+# only; the full path goes through emlManagerLogPath (install-from-disk.praat).
+emlManagerCif_logEventWroteTo$ = "Wrote install file to"
+
 # ============================================================================
 # The wrapper's static header comment (baked verbatim, no per-plugin content;
 # kept quote-free so no escaping is needed at the point of use below).
@@ -125,6 +145,43 @@ procedure emlManagerCifListInstalled: .prefsDir$
         endfor
         @emlManagerBuildLabels: .names$#, .noSuffix$#, .n, emlManager_boolLabelCap
         .labels$# = emlManagerBuildLabels.label$#
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# SPEC_WRAPPER_SAFETY part 2: validates a chosen folder-source folder, in the
+# pinned order -- (a) plugin_ prefix, (b) top-level setup.praat (the
+# installed-iff-setup canon, emlManagerIsInstalled, reused unchanged), (c)
+# the existing non-ASCII name refusal -- stopping at the first failure.
+# Trims any trailing "/" or "\" first (chooseFolder$ may add one). Factored
+# out of the main sequence so the validation order is directly testable
+# headless, at the procedure level, with no dialog. .result$ is one of
+# "ok", "bad_prefix", "no_setup", "non_ascii"; .name$/.path$ are always set
+# (the normalized folder and its bare name), usable by the caller regardless
+# of .result$.
+procedure emlManagerCifValidateFolderSource: .chosenFolder$
+    .path$ = .chosenFolder$
+    while length (.path$) > 0
+        ... and (right$ (.path$, 1) = "/" or right$ (.path$, 1) = "\")
+        .path$ = left$ (.path$, length (.path$) - 1)
+    endwhile
+    @emlManagerBaseName: .path$
+    .name$ = emlManagerBaseName.name$
+
+    if not startsWith (.name$, emlManager_pluginPrefix$)
+        .result$ = "bad_prefix"
+    else
+        @emlManagerIsInstalled: .path$
+        if emlManagerIsInstalled.installed = 0
+            .result$ = "no_setup"
+        else
+            @emlManagerCifAsciiSanitize: .name$
+            if emlManagerCifAsciiSanitize.hadNonAscii = 1
+                .result$ = "non_ascii"
+            else
+                .result$ = "ok"
+            endif
+        endif
     endif
 endproc
 
@@ -377,6 +434,9 @@ emlManagerCif_staticTemplate$# = {
     ... "wrapLabelThisVersion$ = ""This installer's version: """,
     ... "wrapMidVersion$ = "" version """,
     ... "wrapMsgInstalledSuffix$ = "" installed.""",
+    ... "wrapTitleAlreadyInPlace$ = ""Install: already in place""",
+    ... "wrapLabelFolder$ = ""Folder: """,
+    ... "wrapMsgAlreadyInPlace$ = ""This install file is running from inside the installed copy itself, so there is nothing to install.""",
     ... "",
     ... "procedure wrapEmitWrapped: .text$",
     ... "    @emlManagerWrapText: .text$, emlManager_wrapWidth",
@@ -421,6 +481,26 @@ emlManagerCif_staticTemplate$# = {
     ... "            endwhile",
     ... "            .version$ = .raw$",
     ... "        endif",
+    ... "    endif",
+    ... "endproc",
+    ... "",
+    ... "procedure wrapNormalizePath: .path$",
+    ... "    .result$ = replace$ (.path$, ""\"", ""/"", 0)",
+    ... "    while length (.result$) > 0 and right$ (.result$, 1) = ""/""",
+    ... "        .result$ = left$ (.result$, length (.result$) - 1)",
+    ... "    endwhile",
+    ... "endproc",
+    ... "",
+    ... "procedure wrapCheckSelfInstall: .scriptFolder$, .destPath$",
+    ... "    @wrapNormalizePath: .scriptFolder$",
+    ... "    .normScript$ = wrapNormalizePath.result$",
+    ... "    @wrapNormalizePath: .destPath$",
+    ... "    .normDest$ = wrapNormalizePath.result$",
+    ... "    .fires = 0",
+    ... "    if .normScript$ = .normDest$",
+    ... "        .fires = 1",
+    ... "    elsif startsWith (.normScript$, .normDest$ + ""/"")",
+    ... "        .fires = 1",
     ... "    endif",
     ... "endproc",
     ... "",
@@ -521,6 +601,24 @@ emlManagerCif_staticTemplate$# = {
     ... "",
     ... "    scriptFolder$ = defaultDirectory$",
     ... "    prefsDir$ = preferencesDirectory$",
+    ... "    destPath$ = prefsDir$ + ""/"" + wrapFolderName$",
+    ... "",
+    ... "    @wrapCheckSelfInstall: scriptFolder$, destPath$",
+    ... "    if wrapCheckSelfInstall.fires = 1",
+    ... "        @wrapReadVersionFile: destPath$",
+    ... "        wrapGuardInstalledVersion$ = wrapReadVersionFile.version$",
+    ... "        beginPause: wrapTitleAlreadyInPlace$",
+    ... "            @wrapEmitWrapped: wrapLabelFolder$ + wrapFolderName$",
+    ... "            @wrapEmitWrapped: wrapLabelThisVersion$ + wrapVersion$",
+    ... "            @wrapEmitWrapped: wrapMsgAlreadyInPlace$",
+    ... "            if wrapGuardInstalledVersion$ = """"",
+    ... "                @wrapEmitWrapped: wrapLabelInstalledVersion$ + wrapUnknownVersion$",
+    ... "            else",
+    ... "                @wrapEmitWrapped: wrapLabelInstalledVersion$ + wrapGuardInstalledVersion$",
+    ... "            endif",
+    ... "        endPause: wrapBtnOK$, 1, 0",
+    ... "        exitScript ( )",
+    ... "    endif",
     ... "",
     ... "    @wrapVerifyManifestUnder: scriptFolder$",
     ... "    if wrapVerifyManifestUnder.ok = 0",
@@ -528,7 +626,6 @@ emlManagerCif_staticTemplate$# = {
     ... "            ... wrapVerifyManifestUnder.missingPath$ + wrapMsgMissingSuffix$",
     ... "    endif",
     ... "",
-    ... "    destPath$ = prefsDir$ + ""/"" + wrapFolderName$",
     ... "    wasGhostReused = 0",
     ... "",
     ... "    if folderExists (destPath$)",
@@ -766,7 +863,7 @@ if not variableExists ("emlManagerCif_harnessMode")
     endif
     scratchDir$ = emlManagerMakeStaging.path$
 
-    # --- Dialog 1: which installed plugin ---
+    # --- Dialog 1: which installed plugin, or another folder (part 2) ---
 
     @emlManagerCifListInstalled: prefsDir$
     nInstalled = emlManagerCifListInstalled.n
@@ -786,23 +883,79 @@ if not variableExists ("emlManagerCif_harnessMode")
             for iOpt to nInstalled
                 option: labels$# [iOpt]
             endfor
+            option: emlManagerCif_anotherFolderLabel$
     clicked1 = endPause: emlManagerCif_btnQuit$, emlManagerCif_btnContinue$, 2, 0
     if clicked1 = 1
         @emlManagerCleanupStaging: scratchDir$
         exitScript: emlManager_msgCancelled$
     endif
 
-    pluginFolderName$ = names$# [plugin]
-    pluginPath$ = prefsDir$ + "/" + pluginFolderName$
+    usingFolderSource = 0
+    if plugin > nInstalled
+        usingFolderSource = 1
+    endif
 
-    # ASCII guard: a non-ASCII folder name refuses generation.
-    @emlManagerCifAsciiSanitize: pluginFolderName$
-    if emlManagerCifAsciiSanitize.hadNonAscii = 1
-        @emlManagerCleanupStaging: scratchDir$
-        beginPause: emlManagerCif_titleNonAsciiName$
-            @emlManagerCifEmitWrapped: emlManagerCif_msgNonAsciiName$
-        endPause: emlManagerCif_btnOK$, 1, 0
-        exitScript ( )
+    if usingFolderSource = 1
+
+        # --- Folder-source path: the author's dev copy, outside prefsDir$ ---
+
+        chosenFolder$ = chooseFolder$: emlManagerCif_chooseFolderTitle$
+        if chosenFolder$ = ""
+            @emlManagerCleanupStaging: scratchDir$
+            exitScript: emlManager_msgCancelled$
+        endif
+
+        @emlManagerCifValidateFolderSource: chosenFolder$
+        pluginFolderName$ = emlManagerCifValidateFolderSource.name$
+        pluginPath$ = emlManagerCifValidateFolderSource.path$
+
+        if emlManagerCifValidateFolderSource.result$ = "bad_prefix"
+            # (a) the folder name must begin with plugin_ -- Praat's own
+            #     activation rule; no auto-rename (offer-never-force), and
+            #     here we do not even offer, since renaming the author's dev
+            #     folder is not this command's business.
+            @emlManagerCleanupStaging: scratchDir$
+            beginPause: emlManagerCif_titleBadFolderName$
+                @emlManagerCifEmitWrapped: emlManagerCif_msgBadFolderNamePrefix$
+                    ... + pluginFolderName$ + emlManagerCif_msgBadFolderNameSuffix$
+            endPause: emlManagerCif_btnOK$, 1, 0
+            exitScript ( )
+        elsif emlManagerCifValidateFolderSource.result$ = "no_setup"
+            # (b) must contain a top-level setup.praat -- the
+            #     installed-iff-setup canon, reused via
+            #     emlManagerCifValidateFolderSource, never reimplemented.
+            @emlManagerCleanupStaging: scratchDir$
+            beginPause: emlManagerCif_titleNoSetup$
+                @emlManagerCifEmitWrapped: emlManagerCif_msgNoSetupPrefix$
+                    ... + pluginFolderName$ + emlManagerCif_msgNoSetupSuffix$
+            endPause: emlManagerCif_btnOK$, 1, 0
+            exitScript ( )
+        elsif emlManagerCifValidateFolderSource.result$ = "non_ascii"
+            # (c) the existing non-ASCII name refusal applies unchanged.
+            @emlManagerCleanupStaging: scratchDir$
+            beginPause: emlManagerCif_titleNonAsciiName$
+                @emlManagerCifEmitWrapped: emlManagerCif_msgNonAsciiName$
+            endPause: emlManagerCif_btnOK$, 1, 0
+            exitScript ( )
+        endif
+
+    else
+
+        # --- Installed-plugin path: unchanged ---
+
+        pluginFolderName$ = names$# [plugin]
+        pluginPath$ = prefsDir$ + "/" + pluginFolderName$
+
+        # ASCII guard: a non-ASCII folder name refuses generation.
+        @emlManagerCifAsciiSanitize: pluginFolderName$
+        if emlManagerCifAsciiSanitize.hadNonAscii = 1
+            @emlManagerCleanupStaging: scratchDir$
+            beginPause: emlManagerCif_titleNonAsciiName$
+                @emlManagerCifEmitWrapped: emlManagerCif_msgNonAsciiName$
+            endPause: emlManagerCif_btnOK$, 1, 0
+            exitScript ( )
+        endif
+
     endif
 
     # --- Dialog 2: version, looping on an invalid entry until Quit or a
@@ -854,9 +1007,11 @@ if not variableExists ("emlManagerCif_harnessMode")
         exitScript ( )
     endif
 
+    @emlManagerLogPath: emlManagerCif_logEventWroteTo$, pluginPath$
     beginPause: emlManagerCif_titleComplete$
         comment: emlManagerCif_msgWroteToPrefix$ + emlManagerCifGenerateWrapper.wrapperFileName$
-            ... + emlManagerCif_msgWroteToMid$ + pluginPath$ + "."
+            ... + emlManagerCif_msgWroteToMid$ + pluginFolderName$ + "."
+        @emlManagerCifEmitWrapped: emlManager_msgSeePathInInfo$
         comment: string$ (emlManagerCifGenerateWrapper.manifestCount) + emlManagerCif_msgManifestSuffix$
         comment: ""
         @emlManagerCifEmitWrapped: emlManagerCif_msgRegenReminder$

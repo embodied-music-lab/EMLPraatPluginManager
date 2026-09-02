@@ -95,6 +95,11 @@ emlManagerRemove_wordFolderPlural$ = "folders"
 
 emlManagerRemove_msgWillArchiveTo$ = "Will be archived to "
 emlManagerRemove_msgArchivedTo$ = "archived to "
+# SPEC_WRAPPER_SAFETY part 3 sweep: both messages above name the archive
+# destination FOLDER only in the dialog now; the full path goes through
+# emlManagerLogPath (install-from-disk.praat) into the Info window instead.
+emlManagerRemove_logEventWillArchive$ = "Will archive to"
+emlManagerRemove_logEventArchived$ = "Archived to"
 emlManagerRemove_msgFilesArchivedSuffix$ = " archived, originals removed"
 # HIDDEN FILES (measured): fileNames$#/folderNames$# cannot enumerate
 # dot-files, so a folder can remain non-empty after the delete walk purely
@@ -525,8 +530,9 @@ if not variableExists ("emlManagerRemove_harnessMode")
                     ... + emlManagerRemove_countsSep$
                     ... + string$ (folderCount# [iShow2]) + " " + folderWord$
                 @emlManagerRemoveEmitWrapped: countsLine$
+                @emlManagerLogPath: emlManagerRemove_logEventWillArchive$, destPath$# [iShow2]
                 @emlManagerRemoveEmitWrapped: emlManagerRemove_msgWillArchiveTo$
-                    ... + destPath$# [iShow2] + "."
+                    ... + destName$# [iShow2] + ". " + emlManager_msgSeePathInInfo$
             endfor
             comment: ""
             @emlManagerRemoveEmitWrapped: emlManagerRemove_msgAlways1$
@@ -580,7 +586,9 @@ if not variableExists ("emlManagerRemove_harnessMode")
 
     beginPause: emlManagerRemove_titleComplete$
         for iDone from 1 to nSel
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgArchivedTo$ + destPath$# [iDone]
+            @emlManagerLogPath: emlManagerRemove_logEventArchived$, destPath$# [iDone]
+            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgArchivedTo$ + destName$# [iDone]
+                ... + ". " + emlManager_msgSeePathInInfo$
             @emlManagerRemovePluralWord: fileCount# [iDone],
                 ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
             doneFileWord$ = emlManagerRemovePluralWord.word$

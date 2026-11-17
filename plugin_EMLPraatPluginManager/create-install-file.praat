@@ -15,7 +15,9 @@
 # Date: 17 November 2026
 # Version: 1.2
 #
-# 1.2 -- Version 0.7.3. The completion dialog of a generated install file
+# 1.2 -- Version 0.7.3. The plugin list opens on "Another folder", so
+#       packaging a plugin that is not installed is the default; installed
+#       plugins follow it. The completion dialog of a generated install file
 #       pages by the manager's own page budget, the measured on-screen height
 #       of each line, so the Next and OK buttons stay on screen. A page
 #       break never splits one command's wrapped lines. The command report
@@ -65,7 +67,6 @@ include ../plugin_EMLPraatPluginManager/install-from-disk.praat
 
 emlManagerCif_title1$ = "Create install file for a plugin"
 emlManagerCif_title2$ = "Version"
-emlManagerCif_titleNoPlugins$ = "No plugins installed"
 emlManagerCif_titleBadVersion$ = "Invalid version"
 emlManagerCif_titleComplete$ = "Install file created"
 emlManagerCif_titleGenFailed$ = "Could not create the install file"
@@ -81,7 +82,6 @@ emlManagerCif_versionFieldLabel$ = "Version"
 emlManagerCif_versionHint$ = "Numbers and periods only (for example 1.2.0)."
 emlManagerCif_defaultVersion$ = "1.0.0"
 
-emlManagerCif_msgNoPlugins$ = "No installed plugin has a setup.praat to build an install file for."
 emlManagerCif_msgWroteToPrefix$ = "Wrote "
 emlManagerCif_msgWroteToMid$ = " to "
 emlManagerCif_msgManifestSuffix$ = " files listed in its manifest."
@@ -97,13 +97,14 @@ emlManagerCif_wrapperExt$ = ".praat"
 emlManagerCif_oldPrefix$ = "old_"
 
 # SPEC_WRAPPER_SAFETY part 2: the folder-source option. The optionmenu's
-# final entry (exact text pinned by the spec) routes to a folder chooser
+# FIRST entry (default since 0.7.3; exact text pinned by the spec) routes to a folder chooser
 # instead of prefsDir$; MEASURED at GUI 6.6.30 (both chooseFolder$: and
 # chooseDirectory$: exist and open a working GTK folder picker, both return
 # "" on Cancel -- chooseFolder$: is used here for consistency with its only
 # other call site in this codebase, install-from-disk.praat's own "a folder
 # that is already unpacked" source option).
 emlManagerCif_anotherFolderLabel$ = "Another folder (chosen in the next step)"
+emlManagerCif_anotherFolderIndex = 1
 emlManagerCif_chooseFolderTitle$ = "Select the plugin folder"
 emlManagerCif_titleBadFolderName$ = "Not a plugin folder"
 emlManagerCif_msgBadFolderNamePrefix$ = "Praat only activates folders whose name starts with plugin_. This folder is named """
@@ -948,23 +949,18 @@ if not variableExists ("emlManagerCif_harnessMode")
 
     @emlManagerCifListInstalled: prefsDir$
     nInstalled = emlManagerCifListInstalled.n
-    if nInstalled = 0
-        @emlManagerCleanupStaging: scratchDir$
-        beginPause: emlManagerCif_titleNoPlugins$
-            comment: emlManagerCif_msgNoPlugins$
-        endPause: emlManagerCif_btnOK$, 1, 0
-        exitScript ( )
-    endif
-
     names$# = emlManagerCifListInstalled.names$#
     labels$# = emlManagerCifListInstalled.labels$#
 
+    # "Another folder" is the first and default choice: packaging a plugin
+    # that is not installed is the usual job. Installed plugins follow it,
+    # so the menu always offers at least the folder choice.
     beginPause: emlManagerCif_title1$
-        optionMenu: emlManagerCif_pluginFieldLabel$, 1
+        optionMenu: emlManagerCif_pluginFieldLabel$, emlManagerCif_anotherFolderIndex
+            option: emlManagerCif_anotherFolderLabel$
             for iOpt to nInstalled
                 option: labels$# [iOpt]
             endfor
-            option: emlManagerCif_anotherFolderLabel$
     clicked1 = endPause: emlManagerCif_btnQuit$, emlManagerCif_btnContinue$, 2, 0
     if clicked1 = 1
         @emlManagerCleanupStaging: scratchDir$
@@ -972,7 +968,7 @@ if not variableExists ("emlManagerCif_harnessMode")
     endif
 
     usingFolderSource = 0
-    if plugin > nInstalled
+    if plugin = emlManagerCif_anotherFolderIndex
         usingFolderSource = 1
     endif
 
@@ -1024,7 +1020,7 @@ if not variableExists ("emlManagerCif_harnessMode")
 
         # --- Installed-plugin path: unchanged ---
 
-        pluginFolderName$ = names$# [plugin]
+        pluginFolderName$ = names$# [plugin - emlManagerCif_anotherFolderIndex]
         pluginPath$ = prefsDir$ + "/" + pluginFolderName$
 
         # ASCII guard: a non-ASCII folder name refuses generation.

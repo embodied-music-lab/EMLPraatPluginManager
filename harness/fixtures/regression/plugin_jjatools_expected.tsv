@@ -1,15 +1,15 @@
-menu	Adds "JJATools" to the Praat menu in the Objects window.
+submenu	Adds a submenu "JJATools" to the Praat menu in the Objects window.
 menu	Adds "Save selected objects..." to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "Copy selected objects..." to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "View each (selected)" to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "View each (from disk)" to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "Sort selected objects..." to the Praat menu in the Objects window, under "JJATools".
-menu	Adds "Formats -" to the Praat menu in the Objects window, under "JJATools".
+submenu	Adds a submenu "Formats -" to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "Save selected objects to JSON..." to the Praat menu in the Objects window, under "Formats -".
-menu	Adds "Object selection -" to the Praat menu in the Objects window, under "JJATools".
+submenu	Adds a submenu "Object selection -" to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "Select one type..." to the Praat menu in the Objects window, under "Object selection -".
 menu	Adds "Invert selection" to the Praat menu in the Objects window, under "Object selection -".
-menu	Adds "Batch processing -" to the Praat menu in the Objects window, under "JJATools".
+submenu	Adds a submenu "Batch processing -" to the Praat menu in the Objects window, under "JJATools".
 menu	Adds "Move boundaries to zero crossings..." to the Praat menu in the Objects window, under "Batch processing -".
 menu	Adds "TextGrids to Audacity labels..." to the Praat menu in the Objects window, under "Batch processing -".
 menu	Adds "Convert to JSON..." to the Praat menu in the Objects window, under "Batch processing -".

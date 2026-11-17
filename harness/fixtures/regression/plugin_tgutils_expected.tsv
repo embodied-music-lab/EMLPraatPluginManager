@@ -1,3 +1,7 @@
+submenu	Adds a submenu "tgutils" to the Praat menu in the Objects window.
+menu	Adds "Make tier times equal (batch)..." to the Praat menu in the Objects window, under "tgutils".
+menu	Adds "TextGrids to Audacity labels (batch)..." to the Praat menu in the Objects window, under "tgutils".
+menu	Adds "Move boundaries to zero-crossings (batch)..." to the Praat menu in the Objects window, under "tgutils".
 action	Adds a "Find label..." button that appears when you select a TextGrid.
 action	Adds a "Index specified labels..." button that appears when you select a TextGrid.
 action	Adds a "Get tier by name..." button that appears when you select a TextGrid.

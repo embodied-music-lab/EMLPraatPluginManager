@@ -1,1 +1,3 @@
+submenu	Adds a submenu "twopass" to the Praat menu in the Objects window.
+menu	Adds "Batch to Pitch (two-pass)..." to the Praat menu in the Objects window, under "twopass".
 action	Adds a "To Pitch (two-pass)..." button that appears when you select a Sound.

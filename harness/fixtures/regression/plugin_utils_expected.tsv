@@ -1,1 +1,3 @@
-	Adds no menu commands or buttons (files only).
+submenu	Adds a submenu "utils" to the Praat menu in the Objects window.
+menu	Adds "Save selected objects..." to the Praat menu in the Objects window, under "utils".
+menu	Adds "Rename (regex)..." to the Praat menu in the Objects window, under "utils".

@@ -1,6 +1,8 @@
-menu	Adds "Select per type..." to the Praat menu in the Objects window.
-menu	Adds "Select types from selection" to the Praat menu in the Objects window.
-menu	Adds "Invert selection" to the Praat menu in the Objects window.
-menu	Adds "Save selection" to the Praat menu in the Objects window.
-action	Adds a "Selection table -" button that appears when you select a Table.
+submenu	Adds a submenu "selection" to the Praat menu in the Objects window.
+menu	Adds "Copy selected objects..." to the Praat menu in the Objects window, under "selection".
+menu	Adds "Sort selected objects..." to the Praat menu in the Objects window, under "selection".
+menu	Adds "Select per type..." to the Praat menu in the Objects window, under "selection".
+menu	Adds "Select types from selection" to the Praat menu in the Objects window, under "selection".
+menu	Adds "Invert selection" to the Praat menu in the Objects window, under "selection".
+menu	Adds "Save selection" to the Praat menu in the Objects window, under "selection".
 action	Adds a "Restore selection" button that appears when you select a Table.

@@ -64,7 +64,9 @@ rises to a version providing a native file comparator.
 Title "Remove a plugin". Lists every `plugin_*` folder in
 `preferencesDirectory$` as an UNCHECKED boolean, sanitized labels per
 the existing rules, paginated at 12. The manager's own folder gets
-the label suffix " (this is the Plugin Manager itself)". Buttons:
+the label suffix " itself" (AMENDED 0.7.3; was " (this is the Plugin
+Manager itself)", which the label cap mangled; the parentheses are gone
+because the sanitizer shows them as extra spaces). Buttons:
 "Quit" / "Continue", default Continue. Quit exits with the existing
 cancelled message. Zero boxes checked + Continue → the existing
 none-selected exit path.
@@ -124,9 +126,8 @@ cannot enumerate dot-files, so the inventory and the delete walk
 cover only visible entries, while the `cp -R` archive copy includes
 hidden files. Consequences, pinned: a folder left non-empty by a
 hidden file takes the recorded-not-fatal branch; the completion
-dialog's remained-folders line reads "<k> folders remained (they
-may contain hidden files Praat cannot see; the archive copy
-includes them)."; Dialog 2's inventory sentence says "complete
+dialog's remained-folders line says how many folders remained and,
+once, why (see the completion dialog below); Dialog 2's inventory sentence says "complete
 file inventory" of what Praat can enumerate — do not claim more.
 
 GATE READBACK (measured, from the failed drive): Praat lowercases
@@ -138,13 +139,31 @@ once, and check no existing caller depended on the unlowered form
 
 ## Completion dialog
 
-Title "Removal complete", OK button. Per plugin: "archived to
-<destination>", "<n> files archived, originals removed", and — only
-when folders remained — "<k> folders remained (they may contain
-hidden files Praat cannot see; the archive copy includes them)."
-Final line: "Restart Praat. The removed commands disappear from the
-menus." If the manager removed itself, instead: "Restart Praat. The
-Plugin Manager's commands will be gone."
+Title "Removal complete". AMENDED 0.7.3 (round 2): the dialog is paged
+by the same page budget as the selection dialog
+(`emlManagerPageMetrics`, in pixels; see the UX round spec, section
+3), so any number of removed plugins fits on screen; a page title carries " (page <i> of <n>)", the
+button reads "Next" on every page but the last and "OK" on the last.
+Per plugin, ONE paragraph (a pause form adds extra height after each
+separate sentence comment, so one paragraph per plugin keeps four
+plugins near 750 px): "<name> is removed. <n> files archived,
+originals removed." and, only when folders remained, " <k> folder
+remains." (plural: " <k> folders remain."), then a blank line that
+separates the plugin from the next. Every plugin is named. The last
+page ends with one footer paragraph: "Each archive path is printed in
+the Info window." (the archive destination per plugin is in the Info
+window, through `emlManagerLogPath`), followed, when any folder
+remained, by "A folder usually remains when hidden files inside it
+(for example .gitignore or .DS_Store) are ones Praat cannot see or
+delete." and "A plugin with a remaining folder is no longer active.
+Its archive copy includes the hidden files."; a blank line; and
+"Restart Praat. The removed commands disappear from the menus." If
+the manager removed itself, instead: "Restart Praat. The Plugin
+Manager's commands will be gone."
+
+The remaining-folder count includes the parent folders of a folder
+that holds a hidden file, which is why the wording says the hidden
+files are inside the folder and calls them the usual cause.
 
 ## Harness (headless, run with the barren build)
 

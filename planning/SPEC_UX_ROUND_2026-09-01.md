@@ -31,8 +31,9 @@ Ghost semantics:
   line for that plugin: "Reused a leftover folder from an earlier
   removal." (named constant).
 - Remove Dialog 1: ghosts are LISTED, annotated with the label
-  suffix " (leftover folder; not an active plugin)" (subject to the
-  ellipsis cap in §2 — the suffix survives, the name shortens).
+  suffix " leftover" (AMENDED 0.7.3; was " (leftover folder; not an
+  active plugin)", too long for the cap beside a real folder name).
+  The suffix is subject to the cap rule in §2c.
   Removing a ghost archives whatever the walk can see (possibly
   nothing) and deletes as usual; the completion dialog reports it
   with the standard lines.
@@ -56,7 +57,7 @@ a. AMENDED (Ian, 1 Sep: visible index prefixes on every row are a
    realistic listings no prefixes appear at all. Uniqueness of the
    derived readback variables remains guaranteed by construction —
    bare labels are unique because they only stay bare when
-   distinct; collided labels are made unique by the prefix. The
+   their derived readback names are distinct; collided labels are made unique by the prefix. The
    install dialog's description comments and the remove flow's
    Dialog 2 continue to carry FULL names (no index numbering
    needed when no prefixes are shown; when a collision forced
@@ -65,18 +66,39 @@ a. AMENDED (Ian, 1 Sep: visible index prefixes on every row are a
 b. ELLIPSIS MARKER = "___" (three underscores) — sanitizer-proof,
    exactly three characters.
 c. CAP INVARIANT: total label length (index prefix included) is
-   ALWAYS <= emlManager_boolLabelCap = 38. Deterministic budget:
-   when a suffix is present, the suffix is first shortened
-   TAIL-PRESERVING to at most 16 characters; the name then gets
-   cap - prefix - marker - len(shortSuffix) and middle-ellipsizes
-   into that budget (tail-preserving, tail >= 8). The suffix is
-   NEVER dropped. When no suffix, the name middle-ellipsizes into
-   cap - prefix with tail >= 14.
+   ALWAYS <= emlManager_boolLabelCap = 38. Deterministic budget,
+   AMENDED 0.7.3 (the manager's own row rendered as
+   "plugin_EMLP___nManager  thi___ itself"):
+   - The name and suffix fit together: nothing is shortened.
+   - Otherwise the suffix is first shortened TAIL-PRESERVING to at
+     most 16 characters (the annotation words are shorter, so they
+     stay whole); the name then gets cap - prefix - len(suffix) and
+     middle-ellipsizes into that budget (tail-preserving, tail >= 8).
+     The annotation is never dropped or cut, so "itself" and
+     "leftover" always show; a name that fits the cap alone is
+     shortened when its annotation needs the room (AMENDED 0.7.3
+     round 2: the earlier rule that kept the name whole and cut the
+     suffix lost the marker for names of 28-38 characters).
+   - No suffix: the name middle-ellipsizes into cap - prefix with
+     tail >= 14.
+   The annotation texts are short so the common rows fit whole:
+   " itself" for the manager's own folder and " leftover" for a
+   ghost, each after a single space and with no punctuation (the
+   sanitizer turns every punctuation mark into a space, so " (itself)"
+   showed as two spaces). The manager's own folder name, 28
+   characters, plus " itself" is 35 and fits whole. Dialog 2 names
+   every plugin in full.
 d. COLLISION GUARDS compare REAL identities, never labels: the
    install pre-dialog duplicate check compares the uncapped
-   proposed names; the remove flow needs no duplicate guard at all
-   (folder names in one directory are unique; the index prefix
-   makes variables unique regardless).
+   proposed names. The label canon (emlManagerBuildLabels) gives the
+   index prefix to every row whose bare DERIVED readback name equals
+   another row's -- AMENDED 0.7.3 round 2: the test runs on the name
+   Praat reads the checkbox back through (sanitized label, spaces to
+   underscores, first letter lowercased), not on the label, because
+   "plugin_foo-bar" (label "plugin_foo bar") and "plugin_foo_bar"
+   read back as the same variable, so ticking one selected the
+   other. The remove flow therefore needs no separate duplicate
+   guard: its readback names are unique by construction.
 e. Harness (amended with 2a): cap never exceeded in any branch
    incl. the 35-37 overflow case; suffix always present when given;
    a listing of DISTINCT names yields NO prefixes and unique
@@ -85,21 +107,52 @@ e. Harness (amended with 2a): cap never exceeded in any branch
    and distinct derived variables; sanitizer-survival of the
    prefix and marker asserted through emlManagerDeriveLabel.
 
-## 3. Line-budget pagination (Ian's ruling: 12 items was too few)
+## 3. Page-budget pagination (Ian's ruling: 12 items was too few)
 
-Ruling: replace the pagination-at-12 ITEM count with ONE canon
-constant `emlManager_pageLineBudget = 30`, counting RENDERED LINES:
-each wrapped comment line = 1, each blank comment = 1, each boolean
-= 1. Items never split across pages: if adding the next item's
-lines would exceed the budget and the page already holds at least
-one item, start a new page. The final page additionally carries the
-literal-toggle boolean and its blank spacer (install dialog only) —
-reserve those 2 lines on the last page. Page titles keep the
-existing " (page i of n)" form; n is computed from the same budget
-walk, stated once. Effect: a plain checkbox list pages at 30 items;
-annotated lists page at whatever count fits the same height.
-`emlManager_pageSize` (12) is retired; no other literal page size
-anywhere.
+AMENDED 0.7.3 (round 4): the budget measures what is rendered. The
+original ruling counted lines (30 per page); a verifier drive showed
+that count lets a page grow past a 900-pixel screen, because a
+comment that ends in a period renders taller than one that does not.
+Procedure `emlManagerPageMetrics` is now the ONE place that states
+the weights and the budget, in pixels, measured on Praat 7.0.03
+(Linux, Xvfb 1280x900, openbox):
+
+- comment ending in a period, and an empty comment: 37
+- comment ending in a colon: 27
+- comment ending in any other character: 22
+- boolean row: 32
+- chrome (button row and padding): 91, the largest measured
+- tallest allowed window (`.screenPx`): 800, which is 900 less 100
+  for the title bar and the menu bar, dock or taskbar
+- budget for rows (`.budgetPx`): 709 (800 less 91)
+
+Procedure `emlManagerLinePx` gives one comment's weight from its last
+character; `emlManagerWrappedPx` gives a text's weight after word
+wrapping and can emit the same lines, so the weight counted is the
+weight shown. A comment longer than the wrap width can only be one
+unbreakable word, which the window wraps onto more rows; each extra
+row adds 22. Items never split across pages: if adding the next
+item's height would exceed the budget and the page already holds at
+least one item, start a new page. AMENDED 0.7.3 (round 5): the walk
+takes a keep-with-previous mark per item, and a marked item stays on
+the page of the item before it. That one rule keeps together the
+wrapped lines of one command (the Installation complete dialog and the
+generated wrapper completion), a "<plugin> adds:" heading with the
+summary line above it and the first command below it, and the restart
+line with the blank line above it. The same rule governs a footer
+reserve when the caller asks that it keep with the last block: the
+Confirm removal footer (the safety switch and Archive and remove) and
+the Removal complete footer keep with the last plugin block, so the
+last page never holds a footer alone. The final page of the install
+dialog additionally carries the literal-toggle boolean and its blank
+spacer (`.reservePx`, 69), kept with the last plugin block (AMENDED round 6),
+so the toggle never sits alone on a page. Page titles keep the " (page i of n)"
+form; n is computed from the same budget walk, stated once. The walk
+(`emlManagerPageBudgetWalk`) works in any unit; the callers pass
+pixels. `emlManager_pageLineBudget` and `emlManager_pageSize` are
+retired; no other page size or line weight appears anywhere. The
+generated install files carry the same procedures, extracted from
+install-from-disk.praat.
 
 ## 4. Harness additions (all headless, real assertions)
 

@@ -35,8 +35,19 @@ the dialog wraps it). Rules:
    IMMEDIATELY followed by `:` or `.` (the modern colon or the
    legacy `...`) — `Add menu commands: ...` is NOT a registration
    (AMENDED: delimiter required). Lines whose first non-blank
-   character is `#` are ignored. Both syntaxes
-   are parsed:
+   character is `#` are ignored. Praat ignores blanks (spaces and
+   tabs) at the start of a line, and so does the parser. A line may
+   start with command modifiers (`nocheck`, `nowarn`, `noprogress`,
+   `demo`, `asynchronous`), stacked in any order. AMENDED 0.7.3
+   (round 2), MEASURED in Praat 7.0.03: a modifier counts only when
+   the keyword is followed by exactly ONE space, which goes with it,
+   and the rest is read from its first character again. A second
+   space or a tab after a keyword leaves the command text starting
+   with a blank, Praat refuses it, and the line is not a
+   registration (under `nocheck` Praat skips it silently). Legacy
+   lines may leave off the trailing script argument (Praat 7.0.03
+   accepts 5 menu or 9 action arguments there); modern lines may
+   not. Both syntaxes are parsed:
    - modern: `Add menu command: "Objects", "Praat", "Title", "", 0, "s.praat"`
    - legacy: `Add menu command... "Objects" "Praat" "Title" "" 0 s.praat`
    Quoted arguments may contain doubled quotes (`""` inside a
@@ -67,7 +78,23 @@ the dialog wraps it). Rules:
    `Plus <computed> command(s) named when the plugin loads.`
 5. A setup.praat with no registration lines at all yields one line:
    `Adds no menu commands or buttons (files only).`
-6. The parser reads only `setup.praat` — files it includes or runs
+6. THE COUNT: the number of clickable commands (rows of kind menu,
+   action, or computed; the submenu rows, the no-commands row and the
+   tally row are not counted) is the parser's `.registered` output. The
+   install checklist's "adds N commands" reads that value
+   (`emlManagerCheckSetupPresent`), so the checklist and this report
+   cannot disagree. A separator line (a title that starts with a
+   hyphen, such as `"--"`; Praat manual, "Add to fixed menu...") is not a
+   command: it is neither counted nor listed, in either syntax. A blank
+   title (a spacer) is the same. AMENDED round 6: a registration with no
+   script (the argument left off, or a quoted empty string) is not a
+   command, because Praat shows it as a submenu title (menu command) or
+   as a heading label that cannot be clicked (action command). A menu
+   one is a row of kind "submenu", worded `Adds a submenu "<title>" to
+   the <menu> menu in the <window> window` with the usual under-clause,
+   and is not counted. An action one is neither listed nor counted. A
+   scriptless menu registration with a computed name is left out.
+7. The parser reads only `setup.praat` — files it includes or runs
    are not followed; nothing is guessed about them.
 
 ## Dialog integration

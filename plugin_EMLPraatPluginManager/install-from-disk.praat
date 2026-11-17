@@ -8,8 +8,40 @@
 #          branch/version/copy junk, honouring the plugin's own self-references),
 #          lets the user select which to install and whether to keep literal
 #          names, archives any existing same-named plugin, and places the new one.
-# Date: 1 September 2026
-# Version: 5.2
+# Date: 17 November 2026
+# Version: 5.4
+#
+# 5.4 -- Version 0.7.3. Two folders whose names differ only in punctuation
+#       (plugin_foo-bar and plugin_foo_bar) no longer share one checkbox: the
+#       label canon now looks for collisions among the names Praat reads
+#       back, not among the labels, so ticking one row selects only that
+#       row. The annotation words (itself, leftover) always show in full.
+#       The installed-command report counts setup.praat lines that start
+#       with nocheck, nowarn, noprogress, demo, or asynchronous (one space
+#       after each keyword, as Praat requires), and legacy lines that leave
+#       off the script argument. The checklist's "adds N commands" now comes
+#       from the same parser as the report. A line whose title starts with a
+#       hyphen ("--", quoted or not) is a separator, and a line with an
+#       empty title is a spacer: neither is counted or listed. A registration
+#       with no script is not a command either: a menu one is listed as a
+#       submenu ("Adds a submenu ...") and not counted, and an action one
+#       (a heading label Praat does not let you click) is left out
+#       (AERoPlot counts 7 commands and lists 1 submenu). On the install
+#       checklist the "use folder names exactly as found" switch now always
+#       shares a page with at least one plugin. Every
+#       paged dialog (the install checklist, the completion dialog, and the
+#       removal dialogs) now pages by the measured on-screen height of its
+#       rows instead of a count of lines, so the Next, OK and action buttons
+#       stay on a 900-pixel-tall screen. The weights and the budget are in
+#       emlManagerPageMetrics.
+#       A page break never splits one command's wrapped lines and never
+#       leaves a heading ("<plugin> adds:") or the summary line above it
+#       alone at the bottom of a page. A word too long for the window
+#       counts as the rows it wraps onto.
+#
+# 5.3 -- Version 0.7.1. Choosing a folder or archive with many plugins scans
+#       much faster: folders with canonical names skip the content scan, and
+#       files that never mention plugin_ are skipped.
 #
 # 5.2 -- AMENDED selection-label subsystem (sec. 2a of the UX round spec,
 #       Ian's 1 Sep amendment: visible index prefixes on every row are a
@@ -56,13 +88,10 @@ emlManager_stagingName$ = "eml_pm_staging"
 emlManager_archiveName$ = "eml_pm_archive"
 emlManager_resultsName$ = "found_plugins.txt"
 
-# UX round 2026-09-01, item 3: every paginated pause dialog pages by
-# rendered-LINE budget (each wrapped comment line, each blank comment, each
-# boolean counts as 1), not by item count -- a plain checkbox list pages at
-# this many items; an annotated list (multi-line description per item) pages
-# at whatever item count fits the same line budget. No literal page size
-# appears anywhere else in this file or in remove-plugin.praat.
-emlManager_pageLineBudget = 30
+# Page budget (0.7.3, round 4): every paginated pause dialog pages by the
+# RENDERED HEIGHT of what it shows, in pixels. The weights and the budget are
+# stated once, in procedure emlManagerPageMetrics below; no other place holds
+# a page size, a line weight, or a count of lines per page.
 
 # UX round 2026-09-01 REVISED, sec. 2: a checkbox label longer than this is
 # shortened with a middle marker (see emlManagerApplyLabelCap). The cap is a
@@ -188,7 +217,17 @@ emlManager_annotGuessed$ = "name guessed from folder "
 # Item 5: installed-command report (emlManagerParseSetupCommands and its
 # Installation-complete dialog integration -- see below).
 emlManager_rptCmdMenu$ = "Add menu command"
+# Praat's manual (Add to fixed menu..., Add to dynamic menu...): a title that
+# starts with a hyphen ("-", "-- peaks --") draws a separator line. It is not
+# a command, so the parser neither counts nor lists it.
+emlManager_rptSeparatorPrefix$ = "-"
 emlManager_rptCmdAction$ = "Add action command"
+# Command modifiers Praat strips from the front of a script line before it
+# runs the command (praat_executeCommand): nowarn, noprogress and nocheck
+# are in the manual ("Scripting 6.8. Messages to the user"); demo and
+# asynchronous are in the interpreter source. A registration line may start
+# with any number of them, in any order.
+emlManager_rptModifiers$# = { "nocheck", "nowarn", "noprogress", "demo", "asynchronous" }
 emlManager_rptVowels$ = "AEIOU"
 emlManager_rptNoCommands$ = "Adds no menu commands or buttons (files only)."
 emlManager_rptComputedPrefix$ = "Plus "
@@ -584,10 +623,12 @@ endproc
 # Deterministic budget (sec. 2c) -- the cap invariant holds in every branch:
 #   - Everything fits as-is: .prefix$ + .name$ + .suffix$, untouched.
 #   - No suffix: .name$ middle-shortens into cap - len(prefix), tail >= 14.
-#   - Suffix present: the suffix is shortened tail-preserving to at most
-#     emlManager_labelSuffixCap chars FIRST (never dropped), then .name$
-#     gets whatever budget is left (cap - prefix - shortened suffix) and
-#     middle-shortens into THAT, tail >= 8. Since emlManagerMiddleEllipsis
+#   - Suffix present and the whole label does not fit: the suffix is
+#     shortened tail-preserving to at most
+#     emlManager_labelSuffixCap chars FIRST (never dropped, and whole
+#     whenever it is that short, so "itself" and "leftover" always show),
+#     then .name$ gets whatever budget is left (cap - prefix - shortened
+#     suffix) and middle-shortens into THAT, tail >= 8. Since emlManagerMiddleEllipsis
 #     itself never exceeds the cap it is given, and every budget here is
 #     computed by subtraction from the true remaining room, the total can
 #     never exceed .cap regardless of name/suffix length (the measured
@@ -656,19 +697,26 @@ endproc
 # checklist and remove's Dialog 1) build their row labels through. Every
 # label starts BARE: pass 1 caps and sanitizes .name$#[i] + .suffix$#[i]
 # with no prefix at all (emlManagerApplyLabelCap with .prefix$ = ""). Pass 2
-# looks for any group of rows whose bare, capped, sanitized .label$ came out
+# looks for any group of rows whose bare DERIVED readback names came out
 # identical, and rebuilds ONLY those rows' label and derived name through
 # the SAME cap-then-sanitize canon with their listing-index prefix
 # (emlManagerIndexPrefix, letter-initial so the derived variable never
 # starts with a digit) prepended -- every member of a colliding group is
 # rebuilt, not just the second one found, so the whole group becomes
-# mutually distinct rather than merely no-longer-matching row 1. A label
-# that stays bare is unique BECAUSE it stayed bare (pass 2 would have caught
-# it otherwise); a label the pass rebuilds is unique because the prefix
-# digits are identity, unique per row by construction (sec. 2a) -- so
-# .derived$# is guaranteed unique either way with no separate duplicate
-# guard needed (sec. 2d). .prefixed# tells each call site whether that row's
-# label carries the prefix, so the description comment / Dialog-2 line
+# mutually distinct rather than merely no-longer-matching row 1.
+# THE COLLISION TEST RUNS ON THE DERIVED NAME, never on the label (0.7.3
+# round 2): Praat reads a checkbox back through the variable name it
+# derives from the label, and two different labels can derive the same
+# name -- "plugin_foo-bar" shows as "plugin_foo bar" and "plugin_foo_bar"
+# shows as "plugin_foo_bar", yet both read back as plugin_foo_bar, so
+# ticking one selected the other. Names that differ only in the case of
+# the first letter collide the same way (emlManagerDeriveLabel lowercases
+# it). A label that stays bare is unique BECAUSE its derived name is; a
+# label the pass rebuilds is unique because the prefix digits are identity,
+# unique per row by construction (sec. 2a) -- so .derived$# is guaranteed
+# unique either way with no separate duplicate guard needed (sec. 2d).
+# .prefixed# tells each call site whether that row's label carries the
+# prefix, so the description comment / Dialog-2 line
 # (emlManagerIndexDescPrefix) can decide whether to show the matching
 # "n<i>." breadcrumb or nothing at all.
 # CALLER REQUIREMENT (measured, barren build 6.6.30): every element of
@@ -683,7 +731,7 @@ endproc
 # never a bare empty$# slot -- see the callers' own comments.
 procedure emlManagerBuildLabels: .name$#, .suffix$#, .n, .cap
     .cap0 = max (.n, 1)
-    .bare$# = empty$# (.cap0)
+    .bareDerived$# = empty$# (.cap0)
     .label$# = empty$# (.cap0)
     .derived$# = empty$# (.cap0)
     .prefixed# = zero# (.cap0)
@@ -691,20 +739,20 @@ procedure emlManagerBuildLabels: .name$#, .suffix$#, .n, .cap
     for .i from 1 to .n
         @emlManagerApplyLabelCap: "", .name$# [.i], .suffix$# [.i], .cap
         @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
-        .bare$# [.i] = emlManagerDeriveLabel.label$
+        .bareDerived$# [.i] = emlManagerDeriveLabel.derived$
         .label$# [.i] = emlManagerDeriveLabel.label$
         .derived$# [.i] = emlManagerDeriveLabel.derived$
     endfor
 
-    # Duplicate detection reads ONLY .bare$# (pass 1's untouched output),
-    # never .label$# -- .label$# is overwritten in place as this very loop
-    # runs, so comparing against it here would let an earlier row's already-
-    # rebuilt (prefixed) label silently stop matching a later row still
-    # holding the original bare text, undercounting the collision group.
+    # Duplicate detection reads ONLY .bareDerived$# (pass 1's untouched
+    # output), never .derived$# -- .derived$# is overwritten in place as this
+    # very loop runs, so comparing against it here would let an earlier
+    # row's already-rebuilt (prefixed) name silently stop matching a later
+    # row still holding the original bare name, undercounting the group.
     for .i from 1 to .n
         .isDup = 0
         for .j from 1 to .n
-            if .j <> .i and .bare$# [.j] = .bare$# [.i]
+            if .j <> .i and .bareDerived$# [.j] = .bareDerived$# [.i]
                 .isDup = 1
             endif
         endfor
@@ -721,78 +769,169 @@ procedure emlManagerBuildLabels: .name$#, .suffix$#, .n, .cap
 endproc
 
 # ----------------------------------------------------------------------------
-# Item 3: line-budget pagination. Packs .nItems items (each .lineCounts#[i]
-# rendered lines) into pages of at most .budget lines, never splitting an
-# item across a page boundary -- a page always takes at least one item, even
-# one whose own line count exceeds the budget, so the walk always makes
-# progress. When .reserveLines > 0 (the install dialog's literal-toggle
-# boolean plus its blank spacer) a trailing pseudo-item of that many lines is
-# walked along with the real items, so the SAME pass that decides page
-# breaks also decides whether the reserve fits on the last items' page or
-# needs a page of its own -- one canon walk, n computed once.
+# The page-budget canon: the ONLY place that states what a pause-window row
+# costs and how much a page may hold. All values are pixels, measured on
+# Praat 7.0.03 (Linux, 1280x900 Xvfb, openbox): a pause window grows by these
+# amounts per row, and its fixed part (button row and padding) is the chrome.
+#   - A comment whose text ends in a period, and an empty comment: 37.
+#   - A comment whose text ends in a colon: 27.
+#   - A comment whose text ends in any other character: 22.
+#   - A boolean (checkbox) row: 32.
+#   - Chrome: 91 (the largest measured; a window of plain comments).
+# The last character of the comment text sets the height. That is what was
+# measured; the Praat source was not available to say why.
+# .screenPx is the tallest pause window allowed: a 900-pixel-tall screen less
+# 100 for the window title bar and the system menu bar, dock or taskbar.
+# .budgetPx is what remains for rows, and is the budget every page walk uses.
+# .reservePx is the install dialog's last-page extra: the literal-names
+# toggle (a boolean) and the blank comment that separates it.
+procedure emlManagerPageMetrics
+    .periodPx = 37
+    .colonPx = 27
+    .commentPx = 22
+    .booleanPx = 32
+    .chromePx = 91
+    .screenPx = 800
+    .budgetPx = .screenPx - .chromePx
+    .reservePx = .booleanPx + .periodPx
+endproc
+
+# Rendered height of one comment row (one wrapped line, or "" for a blank
+# line), by its last character. A line longer than emlManager_wrapWidth can
+# only be one unbreakable word (the wrapper never splits a word), which the
+# window itself wraps onto further rendered rows; each extra row adds
+# .commentPx (measured: about 20 px, so this is conservative). Output: .px.
+procedure emlManagerLinePx: .text$
+    @emlManagerPageMetrics
+    .last$ = right$ (.text$, 1)
+    if .text$ = "" or .last$ = "."
+        .px = emlManagerPageMetrics.periodPx
+    elsif .last$ = ":"
+        .px = emlManagerPageMetrics.colonPx
+    else
+        .px = emlManagerPageMetrics.commentPx
+    endif
+    .extraRows = ceiling (length (.text$) / emlManager_wrapWidth) - 1
+    if .extraRows > 0
+        .px = .px + .extraRows * emlManagerPageMetrics.commentPx
+    endif
+endproc
+
+# Rendered height of a text after word wrapping at emlManager_wrapWidth: the
+# sum of its wrapped lines (a blank text is one blank line). Output: .px.
+# With .emit = 1, inside a pause form, it also emits the lines as comments,
+# so the height counted is the height shown.
+procedure emlManagerWrappedPx: .text$, .emit
+    .px = 0
+    if .text$ = ""
+        @emlManagerLinePx: ""
+        .px = emlManagerLinePx.px
+        if .emit = 1
+            comment: ""
+        endif
+    else
+        @emlManagerWrapText: .text$, emlManager_wrapWidth
+        .nLines = size (emlManagerWrapText.lines$#)
+        for .wi from 1 to .nLines
+            @emlManagerLinePx: emlManagerWrapText.lines$# [.wi]
+            .px = .px + emlManagerLinePx.px
+            if .emit = 1
+                comment: emlManagerWrapText.lines$# [.wi]
+            endif
+        endfor
+    endif
+endproc
+
+# ----------------------------------------------------------------------------
+# Page-budget pagination (see emlManagerPageMetrics). Packs .nItems items
+# (each .itemPx#[i] pixels tall when rendered) into pages of at most
+# .budgetPx pixels. The ONE keep-together rule lives here: an item with
+# .keepPrev#[i] = 1 always stays on the same page as the item before it, so
+# a run of items (the wrapped lines of one command, a heading and its first
+# command) is one unbreakable block. A page always takes at least one block,
+# even one taller than the budget, so the walk always makes progress.
+# When .reservePx > 0 (the install dialog's literal-toggle boolean plus its
+# blank spacer; the removal dialogs' footer with the safety switch) a
+# trailing pseudo-item of that height is walked along with the real items,
+# so the SAME pass that decides page breaks also decides whether the reserve
+# fits on the last block's page. With .reserveKeepsPrev = 1 the reserve is
+# part of the last block, so the last page always holds at least that
+# block; with 0 it may take a page of its own.
 # Output: .nPages, and .pageStartItem#/.pageEndItem# (1-based indices into
 # the real items, per page; a page holding only the reserve has
 # .pageStartItem# [.] > .pageEndItem# [.], an empty range of real items).
-procedure emlManagerPageBudgetWalk: .lineCounts#, .nItems, .budget, .reserveLines
-    .hasReserve = .reserveLines > 0
-    if .hasReserve = 1
-        .totalUnits = .nItems + 1
-    else
-        .totalUnits = .nItems
-    endif
-
-    if .totalUnits = 0
-        .nPages = 0
-        .pageStartItem# = zero# (0)
-        .pageEndItem# = zero# (0)
-    else
-        .work# = zero# (.totalUnits)
-        for .i from 1 to .nItems
-            .work# [.i] = .lineCounts# [.i]
-        endfor
-        if .hasReserve = 1
-            .work# [.totalUnits] = .reserveLines
+procedure emlManagerPageBudgetWalk: .itemPx#, .keepPrev#, .nItems, .budgetPx, .reservePx, .reserveKeepsPrev
+    .unitFirst# = zero# (.nItems + 1)
+    .unitLast# = zero# (.nItems + 1)
+    .unitPx# = zero# (.nItems + 1)
+    .nUnits = 0
+    for .i from 1 to .nItems
+        if .i = 1 or .keepPrev# [.i] = 0
+            .nUnits = .nUnits + 1
+            .unitFirst# [.nUnits] = .i
         endif
-
-        .rawStartUnit# = zero# (.totalUnits)
-        .rawEndUnit# = zero# (.totalUnits)
-        .nPages = 0
-        .cur = 1
-        while .cur <= .totalUnits
-            .sum = 0
-            .last = .cur - 1
-            .u = .cur
-            .keepGoing = 1
-            while .keepGoing = 1 and .u <= .totalUnits
-                .cand = .sum + .work# [.u]
-                if .sum = 0 or .cand <= .budget
-                    .sum = .cand
-                    .last = .u
-                    .u = .u + 1
-                else
-                    .keepGoing = 0
-                endif
-            endwhile
-            .nPages = .nPages + 1
-            .rawStartUnit# [.nPages] = .cur
-            .rawEndUnit# [.nPages] = .last
-            .cur = .last + 1
-        endwhile
-
-        .pageStartItem# = zero# (.nPages)
-        .pageEndItem# = zero# (.nPages)
-        for .p from 1 to .nPages
-            .su = .rawStartUnit# [.p]
-            .eu = .rawEndUnit# [.p]
-            if .eu > .nItems
-                .eItem = .nItems
-            else
-                .eItem = .eu
-            endif
-            .pageStartItem# [.p] = .su
-            .pageEndItem# [.p] = .eItem
-        endfor
+        .unitLast# [.nUnits] = .i
+        .unitPx# [.nUnits] = .unitPx# [.nUnits] + .itemPx# [.i]
+    endfor
+    if .reservePx > 0
+        if .reserveKeepsPrev = 1 and .nUnits > 0
+            .unitPx# [.nUnits] = .unitPx# [.nUnits] + .reservePx
+        else
+            .nUnits = .nUnits + 1
+            .unitFirst# [.nUnits] = .nItems + 1
+            .unitLast# [.nUnits] = .nItems
+            .unitPx# [.nUnits] = .reservePx
+        endif
     endif
+
+    .rawStart# = zero# (.nUnits)
+    .rawEnd# = zero# (.nUnits)
+    .nPages = 0
+    .u = 1
+    while .u <= .nUnits
+        .firstU = .u
+        .sum = .unitPx# [.u]
+        .u = .u + 1
+        .keepGoing = 1
+        while .keepGoing = 1 and .u <= .nUnits
+            if .sum + .unitPx# [.u] <= .budgetPx
+                .sum = .sum + .unitPx# [.u]
+                .u = .u + 1
+            else
+                .keepGoing = 0
+            endif
+        endwhile
+        .nPages = .nPages + 1
+        .rawStart# [.nPages] = .unitFirst# [.firstU]
+        .rawEnd# [.nPages] = .unitLast# [.u - 1]
+    endwhile
+
+    .pageStartItem# = zero# (.nPages)
+    .pageEndItem# = zero# (.nPages)
+    for .p from 1 to .nPages
+        .pageStartItem# [.p] = .rawStart# [.p]
+        .pageEndItem# [.p] = .rawEnd# [.p]
+    endfor
+endproc
+
+# ----------------------------------------------------------------------------
+# The install checklist's pages: one row per plugin (its wrapped description
+# comment plus its checkbox), walked with the literal-names switch and its
+# blank spacer as a footer that keeps with the last plugin row, so the switch
+# never sits alone on a page. Output: .nPages, .pageStartItem#, .pageEndItem#.
+procedure emlManagerChecklistPages: .descLines$#, .nRows
+    @emlManagerPageMetrics
+    .itemPx# = zero# (.nRows)
+    for .i from 1 to .nRows
+        @emlManagerWrappedPx: .descLines$# [.i], 0
+        .itemPx# [.i] = emlManagerWrappedPx.px + emlManagerPageMetrics.booleanPx
+    endfor
+    .noKeep# = zero# (.nRows)
+    @emlManagerPageBudgetWalk: .itemPx#, .noKeep#, .nRows,
+        ... emlManagerPageMetrics.budgetPx, emlManagerPageMetrics.reservePx, 1
+    .nPages = emlManagerPageBudgetWalk.nPages
+    .pageStartItem# = emlManagerPageBudgetWalk.pageStartItem#
+    .pageEndItem# = emlManagerPageBudgetWalk.pageEndItem#
 endproc
 
 # ----------------------------------------------------------------------------
@@ -1295,88 +1434,44 @@ procedure emlManagerDeriveLabel: .name$
 endproc
 
 # ----------------------------------------------------------------------------
-procedure emlManagerNthQuoted: .line$, .n
-    .result$ = ""
-    .found = 0
-    .pos = 1
-    while .found < .n and .pos <= length (.line$)
-        .rest$ = mid$ (.line$, .pos, length (.line$) - .pos + 1)
-        .qIdx = index (.rest$, """")
-        if .qIdx = 0
-            .pos = length (.line$) + 1
-        else
-            .openPos = .pos + .qIdx
-            .afterQ$ = mid$ (.line$, .openPos,
-                ... length (.line$) - .openPos + 1)
-            .closeIdx = index (.afterQ$, """")
-            if .closeIdx = 0
-                .pos = length (.line$) + 1
-            else
-                .found = .found + 1
-                if .found = .n
-                    .result$ = mid$ (.line$, .openPos, .closeIdx - 1)
-                endif
-                .pos = .openPos + .closeIdx
+# Returns .rest$: .line$ with every leading command modifier
+# (emlManager_rptModifiers$#) removed, exactly as Praat removes them
+# (measured, Praat 7.0.03): a modifier counts only when the keyword is
+# followed by ONE space; that space goes with it, and the rest is examined
+# from its first character again, so a second space or a tab after a
+# keyword leaves the command text starting with a blank and Praat refuses
+# it ("Command ' Add menu command...' not available"; under nocheck the
+# line is silently skipped). The caller has already removed the blanks at
+# the start of the whole line, which Praat also ignores.
+procedure emlManagerStripCommandModifiers: .line$
+    .rest$ = .line$
+    .stripped = 1
+    while .stripped = 1
+        .stripped = 0
+        for .m to size (emlManager_rptModifiers$#)
+            .keyword$ = emlManager_rptModifiers$# [.m] + " "
+            if startsWith (.rest$, .keyword$)
+                .rest$ = right$ (.rest$, length (.rest$) - length (.keyword$))
+                .stripped = 1
             endif
-        endif
+        endfor
     endwhile
 endproc
 
 # ----------------------------------------------------------------------------
-procedure emlManagerScanRegLine: .line$
-    .isReg = 0
-    .title$ = ""
-    if startsWith (.line$, "Add menu command")
-        @emlManagerNthQuoted: .line$, 3
-        .title$ = emlManagerNthQuoted.result$
-        .isReg = 1
-    elsif startsWith (.line$, "Add action command")
-        @emlManagerNthQuoted: .line$, 4
-        .title$ = emlManagerNthQuoted.result$
-        .isReg = 1
-    endif
-    if startsWith (.title$, "--") or .title$ = ""
-        .isReg = 0
-        .title$ = ""
-    endif
-endproc
-
-# ----------------------------------------------------------------------------
+# Whether .folderPath$ has a setup.praat and how many clickable commands it
+# registers (submenu headers and button headings are not commands).
+# The count is the report parser's own (emlManagerParseSetupCommands, the
+# ONE canon for reading registration lines), so the checklist's "adds N
+# commands" and the Installation-complete report can never disagree.
 procedure emlManagerCheckSetupPresent: .folderPath$
+    .setupPath$ = .folderPath$ + "/" + emlManager_setupFile$
     .hasSetup = 0
     .commandCount = 0
-    .setupPath$ = .folderPath$ + "/" + emlManager_setupFile$
-    if not fileReadable (.setupPath$)
-        # no setup.praat
-    else
+    if fileReadable (.setupPath$)
         .hasSetup = 1
-        .rawLines$# = readLinesFromFile$# (.setupPath$)
-        .nRaw = size (.rawLines$#)
-        .joined$ = ""
-        for .j from 1 to .nRaw
-            .ln$ = .rawLines$# [.j]
-            while length (.ln$) > 0 and left$ (.ln$, 1) = " "
-                .ln$ = right$ (.ln$, length (.ln$) - 1)
-            endwhile
-            if startsWith (.ln$, "...")
-                .ln$ = right$ (.ln$, length (.ln$) - 3)
-                .joined$ = .joined$ + " " + .ln$
-            else
-                if .joined$ <> ""
-                    @emlManagerScanRegLine: .joined$
-                    if emlManagerScanRegLine.isReg = 1
-                        .commandCount = .commandCount + 1
-                    endif
-                endif
-                .joined$ = .ln$
-            endif
-        endfor
-        if .joined$ <> ""
-            @emlManagerScanRegLine: .joined$
-            if emlManagerScanRegLine.isReg = 1
-                .commandCount = .commandCount + 1
-            endif
-        endif
+        @emlManagerParseSetupCommands: .setupPath$
+        .commandCount = emlManagerParseSetupCommands.registered
     endif
 endproc
 
@@ -1687,20 +1782,27 @@ endproc
 # .depthKnown# is the per-depth title stack in progress (index = depth + 1);
 # a menu command with a literal title updates its own depth's entry so a
 # later, deeper command can look up its parent. Output: .isReg, .kind$
-# ("menu" | "action" | "computed"), .text$ (empty for "computed"), and the
+# ("menu" | "submenu" | "action" | "computed"), .text$ (empty for
+# "computed"), and the
 # (possibly updated) .depthTitle$#/.depthKnown# to copy back into the caller.
-procedure emlManagerRptProcessLogicalLine: .line$, .depthTitle$#, .depthKnown#, .maxDepth
+procedure emlManagerRptProcessLogicalLine: .rawLine$, .depthTitle$#, .depthKnown#, .maxDepth
     .isReg = 0
     .kind$ = ""
     .text$ = ""
+    @emlManagerStripCommandModifiers: .rawLine$
+    .line$ = emlManagerStripCommandModifiers.rest$
     if startsWith (.line$, emlManager_rptCmdMenu$)
         .rest$ = right$ (.line$, length (.line$) - length (emlManager_rptCmdMenu$))
+        # 0.7.3: the legacy ("...") form may leave off the trailing script
+        # argument (measured: Praat 7.0.03 accepts 5 arguments there, as in
+        # a submenu heading line); the modern (":") form may not.
         # AMENDED rule 1: the keyword alone is not enough -- the modern ":"
         # or the legacy "..." must follow IMMEDIATELY, or this is not a
         # registration at all (e.g. "Add menu commands: ..." is prose).
         if startsWith (.rest$, ":") or startsWith (.rest$, "...")
             @emlManagerRptTokens: .rest$, 6
-            if emlManagerRptTokens.n = 6
+            .legacy = startsWith (.rest$, "...")
+            if emlManagerRptTokens.n = 6 or (.legacy = 1 and emlManagerRptTokens.n = 5)
                 .isReg = 1
                 .windowQuoted = emlManagerRptTokens.quoted# [1]
                 .windowVal$ = emlManagerRptTokens.value$# [1]
@@ -1709,13 +1811,39 @@ procedure emlManagerRptProcessLogicalLine: .line$, .depthTitle$#, .depthKnown#, 
                 .titleQuoted = emlManagerRptTokens.quoted# [3]
                 .titleVal$ = emlManagerRptTokens.value$# [3]
                 .depthVal = round (number (emlManagerRptTokens.value$# [5]))
+                # No script (the argument is left off, or is a quoted empty
+                # string): Praat shows the registration as a submenu header,
+                # which is not a command.
+                .scriptless = 0
+                if emlManagerRptTokens.n < 6
+                    .scriptless = 1
+                elsif emlManagerRptTokens.quoted# [6] = 1 and emlManagerRptTokens.value$# [6] = ""
+                    .scriptless = 1
+                endif
                 # AMENDED rule 4: window and menu count too -- a variable
                 # name must never leak into the English, not just the title.
-                if .titleQuoted = 0 or .windowQuoted = 0 or .menuQuoted = 0
-                    .kind$ = "computed"
+                # A separator (title starting with the separator prefix, quoted
+                # or not -- the legacy form allows a bare --) and a spacer
+                # (an empty title) are not commands; both are tested first.
+                if startsWith (.titleVal$, emlManager_rptSeparatorPrefix$)
+                    ... or (.titleQuoted = 1 and .titleVal$ = "")
+                    .isReg = 0
+                elsif .titleQuoted = 0 or .windowQuoted = 0 or .menuQuoted = 0
+                    # A scriptless registration with a computed name is not
+                    # a command and cannot be named: it is left out.
+                    if .scriptless = 1
+                        .isReg = 0
+                    else
+                        .kind$ = "computed"
+                    endif
                 else
                     .kind$ = "menu"
-                    .text$ = "Adds """ + .titleVal$ + """ to the " + .menuVal$
+                    .article$ = "Adds "
+                    if .scriptless = 1
+                        .kind$ = "submenu"
+                        .article$ = "Adds a submenu "
+                    endif
+                    .text$ = .article$ + """" + .titleVal$ + """ to the " + .menuVal$
                         ... + " menu in the " + .windowVal$ + " window"
                     .haveParent = 0
                     if .depthVal > 0 and .depthVal <= .maxDepth
@@ -1741,7 +1869,8 @@ procedure emlManagerRptProcessLogicalLine: .line$, .depthTitle$#, .depthKnown#, 
         # AMENDED rule 1: same immediate-delimiter requirement as menu commands.
         if startsWith (.rest$, ":") or startsWith (.rest$, "...")
             @emlManagerRptTokens: .rest$, 10
-            if emlManagerRptTokens.n = 10
+            .legacy = startsWith (.rest$, "...")
+            if emlManagerRptTokens.n = 10 or (.legacy = 1 and emlManagerRptTokens.n = 9)
                 .isReg = 1
                 .c1$ = emlManagerRptTokens.value$# [1]
                 .n1 = round (number (emlManagerRptTokens.value$# [2]))
@@ -1751,7 +1880,19 @@ procedure emlManagerRptProcessLogicalLine: .line$, .depthTitle$#, .depthKnown#, 
                 .n3 = round (number (emlManagerRptTokens.value$# [6]))
                 .titleQuoted = emlManagerRptTokens.quoted# [7]
                 .titleVal$ = emlManagerRptTokens.value$# [7]
-                if .titleQuoted = 0
+                # No script: Praat shows the registration as a heading label
+                # that cannot be clicked, so it is not a button.
+                .scriptless = 0
+                if emlManagerRptTokens.n < 10
+                    .scriptless = 1
+                elsif emlManagerRptTokens.quoted# [10] = 1 and emlManagerRptTokens.value$# [10] = ""
+                    .scriptless = 1
+                endif
+                if startsWith (.titleVal$, emlManager_rptSeparatorPrefix$)
+                    ... or (.titleQuoted = 1 and .titleVal$ = "")
+                    ... or .scriptless = 1
+                    .isReg = 0
+                elsif .titleQuoted = 0
                     .kind$ = "computed"
                 else
                     .kind$ = "action"
@@ -1774,8 +1915,15 @@ endproc
 # only the named file; anything it includes or runs is not followed.
 # Input: .path$ (absolute path to a setup.praat, or one that does not exist
 # -- treated the same as an empty one, rule 5). Output: .n result rows in
-# parallel .kind$# ("menu" | "action" | "computed") and .text$# (the
-# finished, unwrapped English line -- the caller wraps it for display).
+# parallel .kind$# ("menu" | "submenu" | "action" | "computed") and .text$#
+# (the finished, unwrapped English line -- the caller wraps it for display),
+# and .registered, the number of clickable commands: rows of kind menu,
+# action and computed. A registration with no script is not a command: a
+# menu one is reported as a "submenu" row and not counted, an action one (a
+# heading label that Praat does not let you click) is left out. The "no
+# commands" row and the "plus N commands" summary row are not registrations.
+# emlManagerCheckSetupPresent reports .registered as the checklist's
+# command count.
 procedure emlManagerParseSetupCommands: .path$
     if fileReadable (.path$)
         .rawLines$# = readLinesFromFile$# (.path$)
@@ -1793,42 +1941,46 @@ procedure emlManagerParseSetupCommands: .path$
     .depthTitle$# = empty$# (.maxDepth + 1)
     .depthKnown# = zero# (.maxDepth + 1)
 
-    .logical$ = ""
+    # Join each "..." continuation line onto the line it continues.
+    .logicalLine$# = empty$# (.nRaw + 1)
+    .nLogical = 0
     for .j from 1 to .nRaw
         .ln$ = .rawLines$# [.j]
         while length (.ln$) > 0 and (left$ (.ln$, 1) = " " or left$ (.ln$, 1) = tab$)
             .ln$ = right$ (.ln$, length (.ln$) - 1)
         endwhile
-        if startsWith (.ln$, "...")
-            .logical$ = .logical$ + " " + right$ (.ln$, length (.ln$) - 3)
+        if startsWith (.ln$, "...") and .nLogical > 0
+            .logicalLine$# [.nLogical] = .logicalLine$# [.nLogical] + " "
+                ... + right$ (.ln$, length (.ln$) - 3)
         else
-            if .logical$ <> ""
-                @emlManagerRptProcessLogicalLine: .logical$, .depthTitle$#, .depthKnown#, .maxDepth
-                .depthTitle$# = emlManagerRptProcessLogicalLine.depthTitle$#
-                .depthKnown# = emlManagerRptProcessLogicalLine.depthKnown#
-                if emlManagerRptProcessLogicalLine.isReg = 1
-                    .n = .n + 1
-                    .kind$# [.n] = emlManagerRptProcessLogicalLine.kind$
-                    .text$# [.n] = emlManagerRptProcessLogicalLine.text$
-                    if emlManagerRptProcessLogicalLine.kind$ = "computed"
-                        .computedCount = .computedCount + 1
-                    endif
-                endif
-            endif
-            .logical$ = .ln$
+            .nLogical = .nLogical + 1
+            .logicalLine$# [.nLogical] = .ln$
         endif
     endfor
-    if .logical$ <> ""
-        @emlManagerRptProcessLogicalLine: .logical$, .depthTitle$#, .depthKnown#, .maxDepth
-        if emlManagerRptProcessLogicalLine.isReg = 1
-            .n = .n + 1
-            .kind$# [.n] = emlManagerRptProcessLogicalLine.kind$
-            .text$# [.n] = emlManagerRptProcessLogicalLine.text$
-            if emlManagerRptProcessLogicalLine.kind$ = "computed"
-                .computedCount = .computedCount + 1
+
+    # Only clickable commands count: a submenu header is reported but is not
+    # counted (.clickable), and a button heading is neither.
+    .clickable = 0
+    for .j from 1 to .nLogical
+        if .logicalLine$# [.j] <> ""
+            @emlManagerRptProcessLogicalLine: .logicalLine$# [.j], .depthTitle$#, .depthKnown#, .maxDepth
+            .depthTitle$# = emlManagerRptProcessLogicalLine.depthTitle$#
+            .depthKnown# = emlManagerRptProcessLogicalLine.depthKnown#
+            if emlManagerRptProcessLogicalLine.isReg = 1
+                .n = .n + 1
+                .kind$# [.n] = emlManagerRptProcessLogicalLine.kind$
+                .text$# [.n] = emlManagerRptProcessLogicalLine.text$
+                if emlManagerRptProcessLogicalLine.kind$ = "computed"
+                    .computedCount = .computedCount + 1
+                endif
+                if emlManagerRptProcessLogicalLine.kind$ <> "submenu"
+                    .clickable = .clickable + 1
+                endif
             endif
         endif
-    endif
+    endfor
+
+    .registered = .clickable
 
     if .n = 0
         .n = 1
@@ -1850,6 +2002,95 @@ procedure emlManagerParseSetupCommands: .path$
     endfor
     .kind$# = .trimmedKind$#
     .text$# = .trimmedText$#
+endproc
+
+# ----------------------------------------------------------------------------
+# The command report of one setup.praat as display lines: every entry of
+# emlManagerParseSetupCommands word-wrapped at .wrapWidth and flattened into
+# one list (a computed-count row's own text is empty and is not rendered as
+# a blank line; only its tally line, which has real text, is). .keep#[i] = 1
+# marks a line that continues the entry before it, so a page walk
+# (emlManagerPageBudgetWalk's .keepPrev#) never breaks one entry across
+# pages. The ONE builder for the Installation complete dialog and for the
+# report baked into a generated install file. Output: .n, .lines$#, .keep#.
+procedure emlManagerReportEntries: .setupPath$, .wrapWidth
+    @emlManagerParseSetupCommands: .setupPath$
+    .nRows = emlManagerParseSetupCommands.n
+    .rowText$# = emlManagerParseSetupCommands.text$#
+    .total = 0
+    for .i from 1 to .nRows
+        if .rowText$# [.i] <> ""
+            @emlManagerWrapText: .rowText$# [.i], .wrapWidth
+            .total = .total + size (emlManagerWrapText.lines$#)
+        endif
+    endfor
+    .n = .total
+    .lines$# = empty$# (.n)
+    .keep# = zero# (.n)
+    .k = 0
+    for .i from 1 to .nRows
+        if .rowText$# [.i] <> ""
+            @emlManagerWrapText: .rowText$# [.i], .wrapWidth
+            for .w from 1 to size (emlManagerWrapText.lines$#)
+                .k = .k + 1
+                .lines$# [.k] = emlManagerWrapText.lines$# [.w]
+                if .w > 1
+                    .keep# [.k] = 1
+                endif
+            endfor
+        endif
+    endfor
+endproc
+
+# ----------------------------------------------------------------------------
+# The flattened comment-line list of the Installation complete dialog: each
+# installed plugin's summary line, then -- when .reportShow#[i] = 1 -- its
+# "<folder> adds:" header and its report entries (emlManagerReportEntries).
+# A first pass sizes the list and a second fills it. .keep#[i] = 1 is the
+# page walk's keep-with-previous mark: the continuation lines of one entry
+# stay with that entry's first line, the header stays with the summary line
+# above it and with the first entry below it, and the restart line stays
+# with the blank line above it, so a page break never splits any of them. The first .nSummary entries of the summary
+# vectors are used. Output: .n, .lines$#, .keep#.
+procedure emlManagerBuildCompleteLines: .summaryLines$#, .reportShow#, .reportFolder$#, .reportPath$#, .nSummary
+    .n = 0
+    for .iSummary from 1 to .nSummary
+        .n = .n + 1
+        if .reportShow# [.iSummary] = 1
+            .n = .n + 1
+            @emlManagerReportEntries: .reportPath$# [.iSummary], emlManager_wrapWidth
+            .n = .n + emlManagerReportEntries.n
+        endif
+    endfor
+    .n = .n + 2
+
+    .lines$# = empty$# (.n)
+    .keep# = zero# (.n)
+    .idx = 0
+    for .iSummary from 1 to .nSummary
+        .idx = .idx + 1
+        .lines$# [.idx] = .summaryLines$# [.iSummary]
+        if .reportShow# [.iSummary] = 1
+            .idx = .idx + 1
+            .lines$# [.idx] = .reportFolder$# [.iSummary] + emlManager_rptHeaderSuffix$
+            .keep# [.idx] = 1
+            @emlManagerReportEntries: .reportPath$# [.iSummary], emlManager_wrapWidth
+            .nEntryLines = emlManagerReportEntries.n
+            for .iRep from 1 to .nEntryLines
+                .idx = .idx + 1
+                .lines$# [.idx] = emlManagerReportEntries.lines$# [.iRep]
+                .keep# [.idx] = emlManagerReportEntries.keep# [.iRep]
+            endfor
+            if .nEntryLines > 0
+                .keep# [.idx - .nEntryLines + 1] = 1
+            endif
+        endif
+    endfor
+    .idx = .idx + 1
+    .lines$# [.idx] = ""
+    .idx = .idx + 1
+    .lines$# [.idx] = emlManager_msgRestart$
+    .keep# [.idx] = 1
 endproc
 
 # ============================================================================
@@ -2217,17 +2458,12 @@ if not variableExists ("emlManager_harnessMode")
 
     # --- Selection dialog (paginated by rendered-line budget, item 3).
     #     Final page carries the literal toggle + its blank spacer -- the
-    #     same budget walk that decides page breaks reserves those 2 lines.
+    #     same budget walk that decides page breaks reserves their height.
 
-    itemLines# = zero# (nKeep)
-    for iRow from 1 to nKeep
-        @emlManagerWrapText: descLines$# [iRow], emlManager_wrapWidth
-        itemLines# [iRow] = size (emlManagerWrapText.lines$#) + 1
-    endfor
-    @emlManagerPageBudgetWalk: itemLines#, nKeep, emlManager_pageLineBudget, 2
-    nPages = emlManagerPageBudgetWalk.nPages
-    pageStartItem# = emlManagerPageBudgetWalk.pageStartItem#
-    pageEndItem# = emlManagerPageBudgetWalk.pageEndItem#
+    @emlManagerChecklistPages: descLines$#, nKeep
+    nPages = emlManagerChecklistPages.nPages
+    pageStartItem# = emlManagerChecklistPages.pageStartItem#
+    pageEndItem# = emlManagerChecklistPages.pageEndItem#
 
     for iPage from 1 to nPages
         pageStart = pageStartItem# [iPage]
@@ -2245,10 +2481,7 @@ if not variableExists ("emlManager_harnessMode")
                 # Item 4: pre-wrap at word boundaries into its own comment
                 # widgets, so a long description never renders under the
                 # following checkbox.
-                @emlManagerWrapText: descLines$# [iShow], emlManager_wrapWidth
-                for iWrapLine from 1 to size (emlManagerWrapText.lines$#)
-                    comment: emlManagerWrapText.lines$# [iWrapLine]
-                endfor
+                @emlManagerWrappedPx: descLines$# [iShow], 1
                 boolean: boolLabels$# [iShow], defaultFlags# [iShow]
             endfor
             if iPage = nPages
@@ -2378,63 +2611,22 @@ if not variableExists ("emlManager_harnessMode")
 
     @emlManagerCleanupStaging: stagingPath$
 
-    # Item 5: one pass to size the flattened comment-line list (each
-    # installed plugin's existing summary line, then -- when it was actually
-    # installed -- its "<folder> adds:" header and its wrapped report lines),
-    # a second pass to fill it, then display it through the existing
-    # line-budget pagination (sec. 3, emlManager_pageLineBudget).
-    totalLines = 0
-    for iSummary from 1 to summaryIdx
-        totalLines = totalLines + 1
-        if reportShow# [iSummary] = 1
-            totalLines = totalLines + 1
-            @emlManagerParseSetupCommands: reportPath$# [iSummary]
-            for iRep from 1 to emlManagerParseSetupCommands.n
-                # AMENDED dialog integration: a computed row's text is empty
-                # -- it is not rendered as a blank comment field; only its
-                # tally line (which has real text) is.
-                if emlManagerParseSetupCommands.text$# [iRep] <> ""
-                    @emlManagerWrapText: emlManagerParseSetupCommands.text$# [iRep], emlManager_wrapWidth
-                    totalLines = totalLines + size (emlManagerWrapText.lines$#)
-                endif
-            endfor
-        endif
-    endfor
-    totalLines = totalLines + 2
+    @emlManagerBuildCompleteLines: summaryLines$#, reportShow#, reportFolder$#, reportPath$#, summaryIdx
+    totalLines = emlManagerBuildCompleteLines.n
+    allLines$# = emlManagerBuildCompleteLines.lines$#
+    keepLines# = emlManagerBuildCompleteLines.keep#
 
-    allLines$# = empty$# (totalLines)
-    lineIdx = 0
-    for iSummary from 1 to summaryIdx
-        lineIdx = lineIdx + 1
-        allLines$# [lineIdx] = summaryLines$# [iSummary]
-        if reportShow# [iSummary] = 1
-            lineIdx = lineIdx + 1
-            allLines$# [lineIdx] = reportFolder$# [iSummary] + emlManager_rptHeaderSuffix$
-            @emlManagerParseSetupCommands: reportPath$# [iSummary]
-            for iRep from 1 to emlManagerParseSetupCommands.n
-                if emlManagerParseSetupCommands.text$# [iRep] <> ""
-                    @emlManagerWrapText: emlManagerParseSetupCommands.text$# [iRep], emlManager_wrapWidth
-                    for iWrap from 1 to size (emlManagerWrapText.lines$#)
-                        lineIdx = lineIdx + 1
-                        allLines$# [lineIdx] = emlManagerWrapText.lines$# [iWrap]
-                    endfor
-                endif
-            endfor
-        endif
-    endfor
-    lineIdx = lineIdx + 1
-    allLines$# [lineIdx] = ""
-    lineIdx = lineIdx + 1
-    allLines$# [lineIdx] = emlManager_msgRestart$
-
-    # Item 3: same line-budget walk as the selection dialog; every entry of
-    # allLines$# is already exactly one rendered line, so each is a
-    # 1-line item and no reserve applies.
+    # Same page-budget walk as the selection dialog; every entry of
+    # allLines$# is already exactly one rendered line, weighted by its
+    # measured height, and no reserve applies.
+    @emlManagerPageMetrics
     completeLineWeights# = zero# (totalLines)
     for iWeight from 1 to totalLines
-        completeLineWeights# [iWeight] = 1
+        @emlManagerLinePx: allLines$# [iWeight]
+        completeLineWeights# [iWeight] = emlManagerLinePx.px
     endfor
-    @emlManagerPageBudgetWalk: completeLineWeights#, totalLines, emlManager_pageLineBudget, 0
+    @emlManagerPageBudgetWalk: completeLineWeights#, keepLines#, totalLines,
+        ... emlManagerPageMetrics.budgetPx, 0, 0
     nCompletePages = emlManagerPageBudgetWalk.nPages
     completePageStart# = emlManagerPageBudgetWalk.pageStartItem#
     completePageEnd# = emlManagerPageBudgetWalk.pageEndItem#

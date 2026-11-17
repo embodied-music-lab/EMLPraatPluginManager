@@ -2,16 +2,39 @@
 # EML Plugin Manager -- Create Install File for a Plugin
 # ============================================================================
 # Purpose: Generates a small standalone install script (install-<name>.praat)
-#          inside an already-installed plugin's own folder. The plugin
-#          author zips the folder as usual; a user who unzips it anywhere and
-#          runs the generated script gets the plugin installed with no copy
-#          of this manager on their machine. The generated script catalogs
-#          file NAMES only -- at install time it copies its own parent
-#          folder's contents into the preferences folder; it never reads or
-#          embeds any file's contents itself, and never re-reads this
-#          manager's own files after generation.
-# Date: 1 September 2026
-# Version: 1.0
+#          inside the folder of a plugin: one that is already installed, or
+#          any folder you choose ("Another folder"). The plugin author zips
+#          the folder as usual; a user who unzips it anywhere and runs the
+#          generated script gets the plugin installed with no copy of this
+#          manager on their machine. The generated script catalogs file
+#          NAMES only -- at install time it copies its own parent folder's
+#          contents into the preferences folder; it never reads or embeds
+#          any file's contents itself, and never re-reads this manager's own
+#          files after generation. A generated script run from inside an
+#          installed copy of the same plugin stops and changes nothing.
+# Date: 17 November 2026
+# Version: 1.2
+#
+# 1.2 -- Version 0.7.3. The completion dialog of a generated install file
+#       pages by the manager's own page budget, the measured on-screen height
+#       of each line, so the Next and OK buttons stay on screen. A page
+#       break never splits one command's wrapped lines. The command report
+#       in a generated install file lists a plugin's submenu titles as
+#       submenus and leaves out heading labels, which Praat does not let
+#       you click, so it lists only what you can click. Quitting a dialog
+#       says "Install file creation cancelled.". A
+#       plugin with many commands, such as jjatools, no longer stops with
+#       "Cannot have more than 50 fields in a form", and every command is
+#       still shown. The header comment of every generated install file
+#       tells you which Trust window button to choose in Praat 7 (the third
+#       button, "Yes, and I even allow this script to CONTROL MY COMPUTER
+#       from now on"), because the file writes many files.
+#
+# 1.1 -- Version 0.7.2. You can create an install file for any plugin
+#       folder through "Another folder", not only for installed plugins.
+#       A generated install file run from inside an already-installed copy
+#       stops with an explanation and changes nothing. File paths go to the
+#       Info window so you can copy them.
 #
 # ATTRIBUTION
 # Framework: EML PraatGen by Ian Howell
@@ -48,6 +71,7 @@ emlManagerCif_titleComplete$ = "Install file created"
 emlManagerCif_titleGenFailed$ = "Could not create the install file"
 
 emlManagerCif_btnQuit$ = "Quit"
+emlManagerCif_msgCancelled$ = "Install file creation cancelled."
 emlManagerCif_btnContinue$ = "Continue"
 emlManagerCif_btnCreate$ = "Create"
 emlManagerCif_btnOK$ = "OK"
@@ -94,7 +118,7 @@ emlManagerCif_logEventWroteTo$ = "Wrote install file to"
 
 # ============================================================================
 # The wrapper's static header comment (baked verbatim, no per-plugin content;
-# kept quote-free so no escaping is needed at the point of use below).
+# a doubled quote below is one quote in the wrapper).
 # ============================================================================
 
 emlManagerCif_headerLines$# = {
@@ -107,6 +131,11 @@ emlManagerCif_headerLines$# = {
     ... "# At install time this copies its own parent folder's contents into",
     ... "# Praat's preferences folder under the folder name below. It catalogs",
     ... "# file names only -- never file contents.",
+    ... "#",
+    ... "# If Praat asks whether to trust this script, choose the third",
+    ... "# button, ""Yes, and I even allow this script to CONTROL MY",
+    ... "# COMPUTER from now on"". This script writes many files, and",
+    ... "# Praat would otherwise ask again for each one.",
     ... "" }
 
 # ============================================================================
@@ -236,39 +265,17 @@ procedure emlManagerCifBuildManifest: .pluginPath$, .wrapperFileName$, .scratchF
 endproc
 
 # ----------------------------------------------------------------------------
-# The command report for one plugin's setup.praat: the parser's English
-# lines (emlManagerParseSetupCommands, install-from-disk.praat), each
-# word-wrapped at .wrapWidth and flattened into one list -- the same
-# assembly the interactive installer's completion dialog performs for one
-# plugin (a computed-count row's own text is empty and is not rendered as a
-# blank line; only its tally line, which has real text, is). Baked into the
-# wrapper as static text at generation time, so the wrapper itself never
-# needs the parser.
+# The command report for one plugin's setup.praat, as the lines and
+# keep-with-previous marks the wrapper's completion dialog shows: the
+# manager's own emlManagerReportEntries, so the wrapper and the Installation
+# complete dialog read one report. Baked into the wrapper as static text at
+# generation time, so the wrapper itself never needs the parser.
+# Output: .n, .lines$#, .keep#.
 procedure emlManagerCifBuildReportLines: .setupPath$, .wrapWidth
-    @emlManagerParseSetupCommands: .setupPath$
-    .total = 0
-    for .i from 1 to emlManagerParseSetupCommands.n
-        if emlManagerParseSetupCommands.text$# [.i] <> ""
-            @emlManagerWrapText: emlManagerParseSetupCommands.text$# [.i], .wrapWidth
-            .total = .total + size (emlManagerWrapText.lines$#)
-        endif
-    endfor
-    .lines$# = empty$# (max (.total, 1))
-    .n = 0
-    @emlManagerParseSetupCommands: .setupPath$
-    for .i from 1 to emlManagerParseSetupCommands.n
-        if emlManagerParseSetupCommands.text$# [.i] <> ""
-            @emlManagerWrapText: emlManagerParseSetupCommands.text$# [.i], .wrapWidth
-            for .w from 1 to size (emlManagerWrapText.lines$#)
-                .n = .n + 1
-                .lines$# [.n] = emlManagerWrapText.lines$# [.w]
-            endfor
-        endif
-    endfor
-    if .n = 0
-        .n = 0
-        .lines$# = empty$# (0)
-    endif
+    @emlManagerReportEntries: .setupPath$, .wrapWidth
+    .n = emlManagerReportEntries.n
+    .lines$# = emlManagerReportEntries.lines$#
+    .keep# = emlManagerReportEntries.keep#
 endproc
 
 # ----------------------------------------------------------------------------
@@ -369,6 +376,19 @@ procedure emlManagerCifSerializeArray: .items$#, .n
 endproc
 
 # ----------------------------------------------------------------------------
+# .items#[1..n] as one Praat numeric-vector literal, e.g. { 0, 1 }.
+procedure emlManagerCifSerializeNumbers: .items#, .n
+    .out$ = "{ "
+    for .i from 1 to .n
+        if .i > 1
+            .out$ = .out$ + ", "
+        endif
+        .out$ = .out$ + string$ (.items# [.i])
+    endfor
+    .out$ = .out$ + " }"
+endproc
+
+# ----------------------------------------------------------------------------
 # Appends .lines$#[1..n] to .outPath$ -- writeFileLine for the very first
 # line written to the file (.isFirst = 1, truncating/creating it), appendFileLine
 # for every other line, including every line here when .isFirst = 0.
@@ -386,11 +406,12 @@ endproc
 # The wrapper's static template: every line of the generated install file
 # that never varies by plugin -- its own user-facing text constants (named,
 # per house rule, in the WRAPPER's own source) and every work procedure and
-# main-sequence line. The three embedded canons (the installed test, the
-# version comparator with its numeric-token helper, and the word wrapper)
+# main-sequence line. The four embedded canons (the installed test, the
+# version comparator with its numeric-token helper, the word wrapper, and
+# the page-budget walk with its budget constant)
 # are NOT here -- they are extracted mechanically from install-from-disk.praat
 # by emlManagerCifGenerateWrapper and spliced in ahead of this block, never
-# hand-copied. No fourth canon is needed: the wrapper has no selection
+# hand-copied. No further canon is needed: the wrapper has no selection
 # checklist, so the label-capping machinery (emlManagerMiddleEllipsis and
 # everything built on it) has nothing to do here.
 # ============================================================================
@@ -409,6 +430,10 @@ emlManagerCif_staticTemplate$# = {
     ... "wrapTitleFailed$ = ""Install failed""",
     ... "wrapTitleComplete$ = ""Installed""",
     ... "wrapBtnOK$ = ""OK""",
+    ... "wrapBtnNext$ = ""Next""",
+    ... "wrapPagePrefix$ = "" (page """,
+    ... "wrapPageMid$ = "" of """,
+    ... "wrapPageSuffix$ = "")""",
     ... "wrapBtnQuit$ = ""Quit""",
     ... "wrapBtnKeep$ = ""Keep a backup and install""",
     ... "wrapLabelDelete$ = ""Delete the installed copy instead""",
@@ -569,17 +594,21 @@ emlManagerCif_staticTemplate$# = {
     ... "    .ok = folderExists (.dst$)",
     ... "endproc",
     ... "",
+    ... "# The completion lines and, per line, whether it continues the entry",
+    ... "# before it (1) -- the page walk keeps those together on one page.",
     ... "procedure wrapBuildCompletionLines: .wasGhostReused",
     ... "    .n = size (wrapReportLines$#) + 3",
     ... "    if .wasGhostReused = 1",
     ... "        .n = .n + 1",
     ... "    endif",
     ... "    .lines$# = empty$# (.n)",
+    ... "    .keep# = zero# (.n)",
     ... "    .lines$# [1] = wrapFolderName$ + wrapMidVersion$ + wrapVersion$ + wrapMsgInstalledSuffix$",
     ... "    .idx = 1",
     ... "    for .ri to size (wrapReportLines$#)",
     ... "        .idx = .idx + 1",
     ... "        .lines$# [.idx] = wrapReportLines$# [.ri]",
+    ... "        .keep# [.idx] = wrapReportKeep# [.ri]",
     ... "    endfor",
     ... "    if .wasGhostReused = 1",
     ... "        .idx = .idx + 1",
@@ -589,6 +618,7 @@ emlManagerCif_staticTemplate$# = {
     ... "    .lines$# [.idx] = """"",
     ... "    .idx = .idx + 1",
     ... "    .lines$# [.idx] = wrapMsgRestart$",
+    ... "    .keep# [.idx] = 1",
     ... "endproc",
     ... "",
     ... "if not variableExists (""wrapHarnessMode"")",
@@ -693,12 +723,39 @@ emlManagerCif_staticTemplate$# = {
     ... "            ... wrapVerifyManifestUnder.missingPath$ + wrapMsgIncompleteSuffix$",
     ... "    endif",
     ... "",
+    ... "    # The completion dialog is paged by the manager's page budget (the",
+    ... "    # rendered height of each line, in pixels), so every command is shown",
+    ... "    # with its buttons on screen however many the plugin registers.",
     ... "    @wrapBuildCompletionLines: wasGhostReused",
-    ... "    beginPause: wrapTitleComplete$",
-    ... "        for wrapCi to wrapBuildCompletionLines.n",
-    ... "            @wrapEmitWrapped: wrapBuildCompletionLines.lines$# [wrapCi]",
-    ... "        endfor",
-    ... "    endPause: wrapBtnOK$, 1, 0",
+    ... "    wrapNLines = wrapBuildCompletionLines.n",
+    ... "    wrapLineWeights# = zero# (wrapNLines)",
+    ... "    for wrapCi to wrapNLines",
+    ... "        @emlManagerWrappedPx: wrapBuildCompletionLines.lines$# [wrapCi], 0",
+    ... "        wrapLineWeights# [wrapCi] = emlManagerWrappedPx.px",
+    ... "    endfor",
+    ... "    @emlManagerPageMetrics",
+    ... "    @emlManagerPageBudgetWalk: wrapLineWeights#, wrapBuildCompletionLines.keep#, wrapNLines,",
+    ... "        ... emlManagerPageMetrics.budgetPx, 0, 0",
+    ... "    wrapNPages = emlManagerPageBudgetWalk.nPages",
+    ... "    wrapPageStart# = emlManagerPageBudgetWalk.pageStartItem#",
+    ... "    wrapPageEnd# = emlManagerPageBudgetWalk.pageEndItem#",
+    ... "    for wrapPi to wrapNPages",
+    ... "        if wrapNPages = 1",
+    ... "            wrapPageTitle$ = wrapTitleComplete$",
+    ... "        else",
+    ... "            wrapPageTitle$ = wrapTitleComplete$ + wrapPagePrefix$ + string$ (wrapPi)",
+    ... "                ... + wrapPageMid$ + string$ (wrapNPages) + wrapPageSuffix$",
+    ... "        endif",
+    ... "        beginPause: wrapPageTitle$",
+    ... "            for wrapCi from wrapPageStart# [wrapPi] to wrapPageEnd# [wrapPi]",
+    ... "                @wrapEmitWrapped: wrapBuildCompletionLines.lines$# [wrapCi]",
+    ... "            endfor",
+    ... "        if wrapPi < wrapNPages",
+    ... "            endPause: wrapBtnNext$, 1, 0",
+    ... "        else",
+    ... "            endPause: wrapBtnOK$, 1, 0",
+    ... "        endif",
+    ... "    endfor",
     ... "    exitScript ( )",
     ... "",
     ... "endif" }
@@ -711,8 +768,8 @@ emlManagerCif_staticTemplate$# = {
 # Writes install-<stem>.praat into .pluginPath$ (.folderName$ without the
 # plugin_ prefix is <stem>), where .folderName$ is the plugin's TRUE folder
 # name (never re-derived from a path) and .version$ is the value already
-# written to VERSION by the caller. .ok = 0 only when the three embedded
-# canons -- or the two constants they depend on -- could not be located in
+# written to VERSION by the caller. .ok = 0 only when the four embedded
+# canons -- or the constants they depend on -- could not be located in
 # this manager's own install-from-disk.praat (a manager file that failed to
 # parse at all would already have stopped this script earlier via the
 # include above, so in practice .ok = 0 signals a renamed procedure/constant
@@ -762,6 +819,8 @@ procedure emlManagerCifGenerateWrapper: .pluginPath$, .folderName$, .version$, .
     endfor
     @emlManagerCifSerializeArray: emlManagerCifBuildReportLines.lines$#, .reportCount
     .reportLine$ = "wrapReportLines$# = " + emlManagerCifSerializeArray.out$
+    @emlManagerCifSerializeNumbers: emlManagerCifBuildReportLines.keep#, .reportCount
+    .reportKeepLine$ = "wrapReportKeep# = " + emlManagerCifSerializeNumbers.out$
 
     @emlManagerCifReadInstallerSource
     .sourceLines$# = emlManagerCifReadInstallerSource.lines$#
@@ -789,10 +848,27 @@ procedure emlManagerCifGenerateWrapper: .pluginPath$, .folderName$, .version$, .
     .blockWrap$# = emlManagerCifExtractBlock.block$#
     .nWrap = emlManagerCifExtractBlock.n
     .foundWrap = emlManagerCifExtractBlock.found
+    @emlManagerCifExtractBlock: .sourceLines$#, "emlManagerPageMetrics"
+    .blockMetrics$# = emlManagerCifExtractBlock.block$#
+    .nMetrics = emlManagerCifExtractBlock.n
+    .foundMetrics = emlManagerCifExtractBlock.found
+    @emlManagerCifExtractBlock: .sourceLines$#, "emlManagerLinePx"
+    .blockLinePx$# = emlManagerCifExtractBlock.block$#
+    .nLinePx = emlManagerCifExtractBlock.n
+    .foundLinePx = emlManagerCifExtractBlock.found
+    @emlManagerCifExtractBlock: .sourceLines$#, "emlManagerWrappedPx"
+    .blockWrappedPx$# = emlManagerCifExtractBlock.block$#
+    .nWrappedPx = emlManagerCifExtractBlock.n
+    .foundWrappedPx = emlManagerCifExtractBlock.found
+    @emlManagerCifExtractBlock: .sourceLines$#, "emlManagerPageBudgetWalk"
+    .blockPageWalk$# = emlManagerCifExtractBlock.block$#
+    .nPageWalk = emlManagerCifExtractBlock.n
+    .foundPageWalk = emlManagerCifExtractBlock.found
 
     .allFound = 1
     if .constSetupFileOk = 0 or .constWrapWidthOk = 0
-        ... or .foundInstalled = 0 or .foundNumeric = 0
+        ... or .foundPageWalk = 0 or .foundMetrics = 0 or .foundLinePx = 0
+        ... or .foundWrappedPx = 0 or .foundInstalled = 0 or .foundNumeric = 0
         ... or .foundCompare = 0 or .foundWrap = 0
         .allFound = 0
     endif
@@ -803,8 +879,9 @@ procedure emlManagerCifGenerateWrapper: .pluginPath$, .folderName$, .version$, .
 
         .folderLine$ = "wrapFolderName$ = """ + .folderName$ + """"
         .versionLine$ = "wrapVersion$ = """ + .version$ + """"
-        .bakedLines$# = { .folderLine$, .versionLine$, .manifestLine$, .reportLine$ }
-        @emlManagerCifAppendLines: .outPath$, .bakedLines$#, 4, 0
+        .bakedLines$# = { .folderLine$, .versionLine$, .manifestLine$, .reportLine$,
+            ... .reportKeepLine$ }
+        @emlManagerCifAppendLines: .outPath$, .bakedLines$#, 5, 0
 
         .constLines$# = { .constSetupFile$, .constWrapWidth$ }
         @emlManagerCifAppendLines: .outPath$, .constLines$#, 2, 0
@@ -813,6 +890,10 @@ procedure emlManagerCifGenerateWrapper: .pluginPath$, .folderName$, .version$, .
         @emlManagerCifAppendLines: .outPath$, .blockNumeric$#, .nNumeric, 0
         @emlManagerCifAppendLines: .outPath$, .blockCompare$#, .nCompare, 0
         @emlManagerCifAppendLines: .outPath$, .blockWrap$#, .nWrap, 0
+        @emlManagerCifAppendLines: .outPath$, .blockMetrics$#, .nMetrics, 0
+        @emlManagerCifAppendLines: .outPath$, .blockLinePx$#, .nLinePx, 0
+        @emlManagerCifAppendLines: .outPath$, .blockWrappedPx$#, .nWrappedPx, 0
+        @emlManagerCifAppendLines: .outPath$, .blockPageWalk$#, .nPageWalk, 0
 
         @emlManagerCifAppendLines: .outPath$, emlManagerCif_staticTemplate$#,
             ... size (emlManagerCif_staticTemplate$#), 0
@@ -887,7 +968,7 @@ if not variableExists ("emlManagerCif_harnessMode")
     clicked1 = endPause: emlManagerCif_btnQuit$, emlManagerCif_btnContinue$, 2, 0
     if clicked1 = 1
         @emlManagerCleanupStaging: scratchDir$
-        exitScript: emlManager_msgCancelled$
+        exitScript: emlManagerCif_msgCancelled$
     endif
 
     usingFolderSource = 0
@@ -902,7 +983,7 @@ if not variableExists ("emlManagerCif_harnessMode")
         chosenFolder$ = chooseFolder$: emlManagerCif_chooseFolderTitle$
         if chosenFolder$ = ""
             @emlManagerCleanupStaging: scratchDir$
-            exitScript: emlManager_msgCancelled$
+            exitScript: emlManagerCif_msgCancelled$
         endif
 
         @emlManagerCifValidateFolderSource: chosenFolder$
@@ -975,7 +1056,7 @@ if not variableExists ("emlManagerCif_harnessMode")
         clicked2 = endPause: emlManagerCif_btnQuit$, emlManagerCif_btnContinue$, 2, 0
         if clicked2 = 1
             @emlManagerCleanupStaging: scratchDir$
-            exitScript: emlManager_msgCancelled$
+            exitScript: emlManagerCif_msgCancelled$
         endif
 
         # Carried forward as the next prefill on a rejected attempt, so the

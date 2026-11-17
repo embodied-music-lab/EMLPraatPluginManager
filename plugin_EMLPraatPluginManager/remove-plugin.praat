@@ -7,8 +7,30 @@
 #          the copy's file-and-folder inventory is checked against the
 #          original, and only then are the original files and folders
 #          deleted. Nothing is removed unless the user explicitly confirms.
-# Date: 1 September 2026
-# Version: 1.2
+# Date: 17 November 2026
+# Version: 1.4
+#
+# 1.4 -- Version 0.7.3. The remove, Confirm removal and Removal complete
+#       dialogs page by the measured on-screen height of their rows (a
+#       comment that ends in a period is taller than one that does not), so
+#       their buttons stay on a 900-pixel-tall screen. The Confirm removal dialog pages by the same
+#       page budget as the selection dialog and names every
+#       selected plugin; the safety switch and the Archive and remove button
+#       appear on the last page only, and Quit appears on every page. The
+#       Removal complete dialog pages the same way, so any number of
+#       removed plugins fits on screen. It names every plugin with its file
+#       count and, when folders remain, how many; a blank line separates
+#       plugins; the archive paths and the usual cause of a remaining
+#       folder are said once. The remaining-folder wording no longer claims
+#       a remaining parent folder holds the hidden files itself. On the
+#       Confirm removal and Removal complete dialogs, the last page always
+#       holds at least one plugin together with the switch and Archive and
+#       remove button (or the OK footer), never the footer alone. Quit now
+#       says "Removal cancelled.".
+#
+# 1.3 -- Version 0.7.3. The Plugin Manager's own row shows its full folder
+#       name followed by "itself", and a leftover folder shows "leftover",
+#       each after a single space.
 #
 # 1.2 -- AMENDED selection-label subsystem (sec. 2a of the UX round spec,
 #       Ian's 1 Sep amendment): Dialog 1's checkbox labels are bare by
@@ -60,6 +82,7 @@ emlManagerRemove_titleNotice$ = "Nothing removed"
 emlManagerRemove_titleComplete$ = "Removal complete"
 
 emlManagerRemove_btnQuit$ = "Quit"
+emlManagerRemove_msgCancelled$ = "Removal cancelled."
 emlManagerRemove_btnContinue$ = "Continue"
 emlManagerRemove_btnNext$ = "Next"
 emlManagerRemove_btnArchiveRemove$ = "Archive and remove"
@@ -69,12 +92,15 @@ emlManagerRemove_gateLabel$ = "Archive and remove the plugins listed above"
 emlManagerRemove_msgGateOff$ = "Nothing was removed. To proceed, switch on '"
     ... + emlManagerRemove_gateLabel$ + "' and press the button again."
 
-emlManagerRemove_managerSuffix$ = " (this is the Plugin Manager itself)"
+# The annotation words follow the folder name after a single space. They carry
+# no punctuation: Praat's label sanitizer turns every non-alphanumeric
+# character into a space, so " (itself)" displayed as two spaces plus the word.
+emlManagerRemove_managerSuffix$ = " itself"
 
 # UX round 2026-09-01, item 1: the Dialog-1 label suffix for a plugin_*
 # folder that exists but is not installed (emlManagerIsInstalled = 0) -- a
 # ghost left behind by an earlier removal.
-emlManagerRemove_ghostSuffix$ = " (leftover folder; not an active plugin)"
+emlManagerRemove_ghostSuffix$ = " leftover"
 
 emlManagerRemove_msgAlways1$ = "The plugin is first copied to the archive with the same mechanism installs use."
 emlManagerRemove_msgAlways2$ = "The copy's complete file inventory is verified against the original before anything is deleted."
@@ -94,19 +120,27 @@ emlManagerRemove_wordFolderSingular$ = "folder"
 emlManagerRemove_wordFolderPlural$ = "folders"
 
 emlManagerRemove_msgWillArchiveTo$ = "Will be archived to "
-emlManagerRemove_msgArchivedTo$ = "archived to "
-# SPEC_WRAPPER_SAFETY part 3 sweep: both messages above name the archive
-# destination FOLDER only in the dialog now; the full path goes through
-# emlManagerLogPath (install-from-disk.praat) into the Info window instead.
+emlManagerRemove_msgRemovedSuffix$ = " is removed."
+# SPEC_WRAPPER_SAFETY part 3 sweep: the confirmation dialog names the archive
+# destination FOLDER only; the full path goes through emlManagerLogPath
+# (install-from-disk.praat) into the Info window instead. The completion
+# dialog does not repeat the destination per plugin (0.7.3 round 2): it says
+# once that each archive path is in the Info window.
 emlManagerRemove_logEventWillArchive$ = "Will archive to"
 emlManagerRemove_logEventArchived$ = "Archived to"
 emlManagerRemove_msgFilesArchivedSuffix$ = " archived, originals removed"
+emlManagerRemove_msgArchivesInInfo$ = "Each archive path is printed in the Info window."
 # HIDDEN FILES (measured): fileNames$#/folderNames$# cannot enumerate
 # dot-files, so a folder can remain non-empty after the delete walk purely
 # because of a file Praat could never have seen -- the archive copy (made
-# with cp -R) has it regardless. Pinned wording: no claim of completeness
-# beyond what Praat can enumerate.
-emlManagerRemove_msgFoldersRemainedSuffix$ = " folders remained (they may contain hidden files Praat cannot see; the archive copy includes them)."
+# with cp -R) has it regardless. The count of remaining folders includes
+# every parent of such a folder, and a folder can also survive for another
+# reason (permissions), so the wording claims only the usual cause and says
+# the hidden files are inside, never that the folder itself holds them.
+emlManagerRemove_msgRemainSingular$ = " folder remains."
+emlManagerRemove_msgRemainPlural$ = " folders remain."
+emlManagerRemove_msgRemainWhy$ = "A folder usually remains when hidden files inside it (for example .gitignore or .DS_Store) are ones Praat cannot see or delete."
+emlManagerRemove_msgRemainTail$ = "A plugin with a remaining folder is no longer active. Its archive copy includes the hidden files."
 
 emlManagerRemove_msgRestartNormal$ = "Restart Praat. The removed commands disappear from the menus."
 emlManagerRemove_msgRestartManager$ = "Restart Praat. The Plugin Manager's commands will be gone."
@@ -148,6 +182,120 @@ procedure emlManagerRemoveEmitWrapped: .text$
     for .wi from 1 to size (emlManagerWrapText.lines$#)
         comment: emlManagerWrapText.lines$# [.wi]
     endfor
+endproc
+
+# ----------------------------------------------------------------------------
+# The Removal complete dialog is built from "lines" that are either counted
+# (.emit = 0, used to page the dialog) or emitted into the pause form being
+# built (.emit = 1). One procedure writes each line group, so the height the
+# page walk uses is exactly what the dialog then shows. .px is the rendered
+# height in pixels (see emlManagerPageMetrics in install-from-disk.praat).
+procedure emlManagerRemoveDoneLine: .text$, .emit
+    @emlManagerWrappedPx: .text$, .emit
+    .px = emlManagerWrappedPx.px
+endproc
+
+# One removed plugin's block: ONE paragraph holding its name, its file
+# count, and (only when above 0) the count of folders that remain, then a
+# blank line that separates it from the next block. One paragraph keeps the
+# rendered height small: the pause form puts extra space after every comment
+# that ends a sentence, so a sentence per comment made each block about twice
+# as tall. The archive destination and the cause of a remaining folder are
+# said once, in the footer below, and the full archive path is in the Info
+# window.
+procedure emlManagerRemoveDoneBlock: .name$, .fileCount, .remained, .emit
+    @emlManagerRemovePluralWord: .fileCount,
+        ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
+    .text$ = .name$ + emlManagerRemove_msgRemovedSuffix$ + " " + string$ (.fileCount)
+        ... + " " + emlManagerRemovePluralWord.word$ + emlManagerRemove_msgFilesArchivedSuffix$ + "."
+    if .remained > 0
+        @emlManagerRemovePluralWord: .remained,
+            ... emlManagerRemove_msgRemainSingular$, emlManagerRemove_msgRemainPlural$
+        .text$ = .text$ + " " + string$ (.remained) + emlManagerRemovePluralWord.word$
+    endif
+    @emlManagerRemoveDoneLine: .text$, .emit
+    .px = emlManagerRemoveDoneLine.px
+    @emlManagerRemoveDoneLine: "", .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+endproc
+
+# The text that closes the last page: one paragraph with the Info-window
+# pointer and, when any plugin left a folder behind, the hidden-files
+# explanation; then a blank line and the restart line.
+procedure emlManagerRemoveDoneFooter: .anyRemained, .anyManager, .emit
+    .text$ = emlManagerRemove_msgArchivesInInfo$
+    if .anyRemained = 1
+        .text$ = .text$ + " " + emlManagerRemove_msgRemainWhy$ + " " + emlManagerRemove_msgRemainTail$
+    endif
+    @emlManagerRemoveDoneLine: .text$, .emit
+    .px = emlManagerRemoveDoneLine.px
+    @emlManagerRemoveDoneLine: "", .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+    if .anyManager = 1
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgRestartManager$, .emit
+    else
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgRestartNormal$, .emit
+    endif
+    .px = .px + emlManagerRemoveDoneLine.px
+endproc
+
+# ----------------------------------------------------------------------------
+# The Confirm removal dialog, built the same way as the Removal complete
+# dialog: counted (.emit = 0, used to page it) or emitted (.emit = 1) by one
+# procedure, so the page walk counts exactly what the dialog then shows.
+# One selected plugin's block: its full folder name (with the "n<index>."
+# breadcrumb only when a collision prefixed its Dialog-1 checkbox), its file
+# and folder counts, and where it will be archived. The full archive path
+# goes to the Info window, once per emitted block.
+procedure emlManagerRemoveGateBlock: .name$, .descPrefix$, .fileCount, .folderCount, .destName$, .destPath$, .emit
+    @emlManagerRemoveDoneLine: .descPrefix$ + .name$, .emit
+    .px = emlManagerRemoveDoneLine.px
+    @emlManagerRemovePluralWord: .fileCount,
+        ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
+    .fileWord$ = emlManagerRemovePluralWord.word$
+    @emlManagerRemovePluralWord: .folderCount,
+        ... emlManagerRemove_wordFolderSingular$, emlManagerRemove_wordFolderPlural$
+    @emlManagerRemoveDoneLine: string$ (.fileCount) + " " + .fileWord$
+        ... + emlManagerRemove_countsSep$ + string$ (.folderCount) + " "
+        ... + emlManagerRemovePluralWord.word$, .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+    if .emit = 1
+        @emlManagerLogPath: emlManagerRemove_logEventWillArchive$, .destPath$
+    endif
+    @emlManagerRemoveDoneLine: emlManagerRemove_msgWillArchiveTo$ + .destName$ + ". "
+        ... + emlManager_msgSeePathInInfo$, .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+endproc
+
+# What closes the last page: a blank line, the three always-true sentences,
+# the Plugin Manager's own warning when it is selected, and the safety
+# switch (one boolean row). The switch exists only on the last page.
+procedure emlManagerRemoveGateFooter: .anyManager, .emit
+    @emlManagerRemoveDoneLine: "", .emit
+    .px = emlManagerRemoveDoneLine.px
+    @emlManagerRemoveDoneLine: emlManagerRemove_msgAlways1$, .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+    @emlManagerRemoveDoneLine: emlManagerRemove_msgAlways2$, .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+    @emlManagerRemoveDoneLine: emlManagerRemove_msgAlways3$, .emit
+    .px = .px + emlManagerRemoveDoneLine.px
+    if .anyManager = 1
+        @emlManagerRemoveDoneLine: "", .emit
+        .px = .px + emlManagerRemoveDoneLine.px
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgMgr1$, .emit
+        .px = .px + emlManagerRemoveDoneLine.px
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgMgr2$, .emit
+        .px = .px + emlManagerRemoveDoneLine.px
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgMgr3$, .emit
+        .px = .px + emlManagerRemoveDoneLine.px
+        @emlManagerRemoveDoneLine: emlManagerRemove_msgMgr4$, .emit
+        .px = .px + emlManagerRemoveDoneLine.px
+    endif
+    if .emit = 1
+        boolean: emlManagerRemove_gateLabel$, 0
+    endif
+    @emlManagerPageMetrics
+    .px = .px + emlManagerPageMetrics.booleanPx
 endproc
 
 # ----------------------------------------------------------------------------
@@ -397,7 +545,8 @@ if not variableExists ("emlManagerRemove_harnessMode")
     nAll = size (allNames$#)
 
     suffix$# = empty$# (max (nAll, 1))
-    itemLines# = zero# (max (nAll, 1))
+    @emlManagerPageMetrics
+    itemPx# = zero# (max (nAll, 1))
     for iName from 1 to nAll
         isOwnFolder = 0
         if allNames$# [iName] = ownFolderName$
@@ -405,7 +554,7 @@ if not variableExists ("emlManagerRemove_harnessMode")
         endif
         @emlManagerRemoveComputeSuffix: allNames$# [iName], isOwnFolder, prefsDir$
         suffix$# [iName] = emlManagerRemoveComputeSuffix.suffix$
-        itemLines# [iName] = 1
+        itemPx# [iName] = emlManagerPageMetrics.booleanPx
     endfor
 
     # Sec. 2a AMENDED: one canon pass over the whole listing builds every
@@ -421,10 +570,11 @@ if not variableExists ("emlManagerRemove_harnessMode")
     derivedNames$# = emlManagerBuildLabels.derived$#
     rowPrefixed# = emlManagerBuildLabels.prefixed#
 
-    # Item 3: line-budget pagination -- each row here is a single boolean
-    # with no description comment, so this is a plain checkbox list; the
-    # budget walk pages it at emlManager_pageLineBudget items per page.
-    @emlManagerPageBudgetWalk: itemLines#, nAll, emlManager_pageLineBudget, 0
+    # Page-budget pagination -- each row here is a single boolean with no
+    # description comment, so this is a plain checkbox list; the budget walk
+    # pages it by the booleans' rendered height.
+    noKeep# = zero# (nAll)
+    @emlManagerPageBudgetWalk: itemPx#, noKeep#, nAll, emlManagerPageMetrics.budgetPx, 0, 0
     nPages = emlManagerPageBudgetWalk.nPages
     pageStartItem# = emlManagerPageBudgetWalk.pageStartItem#
     pageEndItem# = emlManagerPageBudgetWalk.pageEndItem#
@@ -452,7 +602,7 @@ if not variableExists ("emlManagerRemove_harnessMode")
 
         if clicked = 1
             @emlManagerCleanupStaging: scratchDir$
-            exitScript: emlManager_msgCancelled$
+            exitScript: emlManagerRemove_msgCancelled$
         endif
     endfor
 
@@ -503,55 +653,69 @@ if not variableExists ("emlManagerRemove_harnessMode")
         endif
     endfor
 
-    # --- Dialog 2: the gate, looping until Quit or a confirmed removal ---
+    # --- Dialog 2: the gate, looping until Quit or a confirmed removal.
+    #     Paged by the same page budget as Dialog 1: every selected
+    #     plugin is named, and the safety switch with the Archive and remove
+    #     button sit on the last page only. Quit is on every page ---
+
+    gateDescPrefix$# = empty$# (nSel)
+    gateLines# = zero# (nSel)
+    for iGate from 1 to nSel
+        # Sec. 2a AMENDED: the full folder name carries the matching
+        # "n<index>." breadcrumb only when Dialog 1's checkbox for this row
+        # was itself prefixed (a collision forced it).
+        # An element of empty$# that is never assigned is not a usable
+        # string (Praat 7.0.03 crashes when it is passed on), so every
+        # element is set.
+        gateDescPrefix$# [iGate] = ""
+        if rowPrefixed# [selectedIndex# [iGate]] = 1
+            @emlManagerIndexDescPrefix: selectedIndex# [iGate]
+            gateDescPrefix$# [iGate] = emlManagerIndexDescPrefix.prefix$
+        endif
+        @emlManagerRemoveGateBlock: selectedNames$# [iGate], gateDescPrefix$# [iGate],
+            ... fileCount# [iGate], folderCount# [iGate], destName$# [iGate], destPath$# [iGate], 0
+        gateLines# [iGate] = emlManagerRemoveGateBlock.px
+    endfor
+    @emlManagerRemoveGateFooter: anyManager, 0
+    # The footer (safety switch and Archive and remove) is kept with the
+    # last plugin block, so the last page never holds the switch alone.
+    gateKeep# = zero# (nSel)
+    @emlManagerPageBudgetWalk: gateLines#, gateKeep#, nSel, emlManagerPageMetrics.budgetPx,
+        ... emlManagerRemoveGateFooter.px, 1
+    nGatePages = emlManagerPageBudgetWalk.nPages
+    gatePageStart# = emlManagerPageBudgetWalk.pageStartItem#
+    gatePageEnd# = emlManagerPageBudgetWalk.pageEndItem#
 
     gateOn = 0
     while gateOn = 0
-        beginPause: emlManagerRemove_title2$
-            for iShow2 from 1 to nSel
-                # Sec. 2a AMENDED: FULL folder name, carrying the matching
-                # "n<index>." breadcrumb only when Dialog 1's checkbox for
-                # this row was itself prefixed (a collision forced it) --
-                # a bare checkbox's full name needs no breadcrumb.
-                gateDescPrefix$ = ""
-                if rowPrefixed# [selectedIndex# [iShow2]] = 1
-                    @emlManagerIndexDescPrefix: selectedIndex# [iShow2]
-                    gateDescPrefix$ = emlManagerIndexDescPrefix.prefix$
-                endif
-                @emlManagerRemoveEmitWrapped: gateDescPrefix$
-                    ... + selectedNames$# [iShow2]
-                @emlManagerRemovePluralWord: fileCount# [iShow2],
-                    ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
-                fileWord$ = emlManagerRemovePluralWord.word$
-                @emlManagerRemovePluralWord: folderCount# [iShow2],
-                    ... emlManagerRemove_wordFolderSingular$, emlManagerRemove_wordFolderPlural$
-                folderWord$ = emlManagerRemovePluralWord.word$
-                countsLine$ = string$ (fileCount# [iShow2]) + " " + fileWord$
-                    ... + emlManagerRemove_countsSep$
-                    ... + string$ (folderCount# [iShow2]) + " " + folderWord$
-                @emlManagerRemoveEmitWrapped: countsLine$
-                @emlManagerLogPath: emlManagerRemove_logEventWillArchive$, destPath$# [iShow2]
-                @emlManagerRemoveEmitWrapped: emlManagerRemove_msgWillArchiveTo$
-                    ... + destName$# [iShow2] + ". " + emlManager_msgSeePathInInfo$
-            endfor
-            comment: ""
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgAlways1$
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgAlways2$
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgAlways3$
-            if anyManager = 1
-                comment: ""
-                @emlManagerRemoveEmitWrapped: emlManagerRemove_msgMgr1$
-                @emlManagerRemoveEmitWrapped: emlManagerRemove_msgMgr2$
-                @emlManagerRemoveEmitWrapped: emlManagerRemove_msgMgr3$
-                @emlManagerRemoveEmitWrapped: emlManagerRemove_msgMgr4$
+        for iGatePage from 1 to nGatePages
+            if nGatePages = 1
+                gatePageTitle$ = emlManagerRemove_title2$
+            else
+                gatePageTitle$ = emlManagerRemove_title2$ + emlManagerRemove_pagePrefix$
+                    ... + string$ (iGatePage) + emlManagerRemove_pageMid$ + string$ (nGatePages)
+                    ... + emlManagerRemove_pageSuffix$
             endif
-            boolean: emlManagerRemove_gateLabel$, 0
-        clicked2 = endPause: emlManagerRemove_btnQuit$, emlManagerRemove_btnArchiveRemove$, 1, 0
+            beginPause: gatePageTitle$
+                for iShow2 from gatePageStart# [iGatePage] to gatePageEnd# [iGatePage]
+                    @emlManagerRemoveGateBlock: selectedNames$# [iShow2], gateDescPrefix$# [iShow2],
+                        ... fileCount# [iShow2], folderCount# [iShow2], destName$# [iShow2],
+                        ... destPath$# [iShow2], 1
+                endfor
+                if iGatePage = nGatePages
+                    @emlManagerRemoveGateFooter: anyManager, 1
+                endif
+            if iGatePage < nGatePages
+                clicked2 = endPause: emlManagerRemove_btnQuit$, emlManagerRemove_btnNext$, 2, 0
+            else
+                clicked2 = endPause: emlManagerRemove_btnQuit$, emlManagerRemove_btnArchiveRemove$, 1, 0
+            endif
 
-        if clicked2 = 1
-            @emlManagerCleanupStaging: scratchDir$
-            exitScript: emlManager_msgCancelled$
-        endif
+            if clicked2 = 1
+                @emlManagerCleanupStaging: scratchDir$
+                exitScript: emlManagerRemove_msgCancelled$
+            endif
+        endfor
 
         @emlManagerDeriveLabel: emlManagerRemove_gateLabel$
         gateVarName$ = emlManagerDeriveLabel.derived$
@@ -582,30 +746,51 @@ if not variableExists ("emlManagerRemove_harnessMode")
             ... + emlManagerRemove_msgVerifyDiffSuffix$
     endif
 
-    # --- Completion dialog: reached only when every selected plugin succeeded ---
+    # --- Completion dialog: reached only when every selected plugin succeeded.
+    #     Paged by the same page budget as the selection dialog, so
+    #     any number of removed plugins fits on screen, and every plugin is
+    #     named ---
 
-    beginPause: emlManagerRemove_titleComplete$
-        for iDone from 1 to nSel
-            @emlManagerLogPath: emlManagerRemove_logEventArchived$, destPath$# [iDone]
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgArchivedTo$ + destName$# [iDone]
-                ... + ". " + emlManager_msgSeePathInInfo$
-            @emlManagerRemovePluralWord: fileCount# [iDone],
-                ... emlManagerRemove_wordFileSingular$, emlManagerRemove_wordFilePlural$
-            doneFileWord$ = emlManagerRemovePluralWord.word$
-            @emlManagerRemoveEmitWrapped: string$ (fileCount# [iDone]) + " " + doneFileWord$
-                ... + emlManagerRemove_msgFilesArchivedSuffix$
-            if emlManagerRemoveRun.remainedCount# [iDone] > 0
-                @emlManagerRemoveEmitWrapped: string$ (emlManagerRemoveRun.remainedCount# [iDone])
-                    ... + emlManagerRemove_msgFoldersRemainedSuffix$
-            endif
-        endfor
-        comment: ""
-        if anyManager = 1
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgRestartManager$
-        else
-            @emlManagerRemoveEmitWrapped: emlManagerRemove_msgRestartNormal$
+    anyRemained = 0
+    doneLines# = zero# (nSel)
+    for iDone from 1 to nSel
+        @emlManagerLogPath: emlManagerRemove_logEventArchived$, destPath$# [iDone]
+        remained = emlManagerRemoveRun.remainedCount# [iDone]
+        if remained > 0
+            anyRemained = 1
         endif
-    endPause: emlManagerRemove_btnOK$, 1, 0
+        @emlManagerRemoveDoneBlock: selectedNames$# [iDone], fileCount# [iDone], remained, 0
+        doneLines# [iDone] = emlManagerRemoveDoneBlock.px
+    endfor
+    @emlManagerRemoveDoneFooter: anyRemained, anyManager, 0
+    doneKeep# = zero# (nSel)
+    @emlManagerPageBudgetWalk: doneLines#, doneKeep#, nSel, emlManagerPageMetrics.budgetPx,
+        ... emlManagerRemoveDoneFooter.px, 1
+    nDonePages = emlManagerPageBudgetWalk.nPages
+    donePageStart# = emlManagerPageBudgetWalk.pageStartItem#
+    donePageEnd# = emlManagerPageBudgetWalk.pageEndItem#
+    for iDonePage from 1 to nDonePages
+        if nDonePages = 1
+            donePageTitle$ = emlManagerRemove_titleComplete$
+        else
+            donePageTitle$ = emlManagerRemove_titleComplete$ + emlManagerRemove_pagePrefix$
+                ... + string$ (iDonePage) + emlManagerRemove_pageMid$ + string$ (nDonePages)
+                ... + emlManagerRemove_pageSuffix$
+        endif
+        beginPause: donePageTitle$
+            for iDone from donePageStart# [iDonePage] to donePageEnd# [iDonePage]
+                @emlManagerRemoveDoneBlock: selectedNames$# [iDone], fileCount# [iDone],
+                    ... emlManagerRemoveRun.remainedCount# [iDone], 1
+            endfor
+            if iDonePage = nDonePages
+                @emlManagerRemoveDoneFooter: anyRemained, anyManager, 1
+            endif
+        if iDonePage < nDonePages
+            endPause: emlManagerRemove_btnNext$, 1, 0
+        else
+            endPause: emlManagerRemove_btnOK$, 1, 0
+        endif
+    endfor
 
     @emlManagerCleanupStaging: scratchDir$
 

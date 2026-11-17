@@ -7,15 +7,17 @@ companion; where the two differ, this document governs.
 
 ## Status
 
-Version 0.6.2 is out. Installing a plugin from a downloaded zip,
+Version 0.7.3 is out. Installing a plugin from a downloaded zip,
 tar.gz, or folder (with recursive search, canonical-name offers, and
 version-aware collision handling); removing an installed plugin,
 which always archives it first; the report that tells you where a
-newly installed plugin's commands appear; and the one-file install
-script that sets up the manager itself are all built and working
-today. Everything else below — the catalog, update checks, and
-restoring a plugin from the archive — is the plan for later phases;
-see §13 for what has shipped against each phase.
+newly installed plugin's commands appear; the one-file install
+script that sets up the manager itself; and Create install file for
+a plugin, which writes a standalone install script into a plugin's
+folder, are all built and working today. Everything else below — the
+catalog, update checks, and restoring a plugin from the archive — is
+the plan for later phases; see §13 for what has shipped against each
+phase.
 
 ## 1. What this is and what's at stake
 
@@ -55,21 +57,37 @@ descriptor design gets mined before our manifest schema freezes.
 ## 3. The Praat 7 reality
 
 Praat 7.0 (4 August 2026) introduced full-trust checking: a script
-that writes files or runs system commands triggers a permission
-prompt with three options — reject, approve once for this script, or
-approve for this script for the rest of the Praat session. Approvals
-are dumped when Praat closes. There is no way around it, and the
-design does not fight it: minimize the number of challenges, and
-lean into session approval when a prompt is unavoidable.
+that writes files or runs system commands opens Praat's Trust window.
+In Praat 7.0.03 the window offers three buttons: Cancel, and two Yes
+buttons. The full-trust button reads "Yes, and I even allow this
+script to CONTROL MY COMPUTER from now on". There is no way around the
+window, and the design does not fight it: minimize the number of
+challenges, and tell users to choose the full-trust button. The
+manager writes and deletes many files, and Praat would otherwise ask
+again for each one (measured: about 4,180 prompts for the install
+file).
+
+Measured in Praat 7.0.03 with the full-trust button: Praat grants
+trust per script file and asks once per file in each Praat session.
+The manager's install file, each of the three manager commands, and
+each generated install file prompt once the first time they write.
+A script that another script includes is covered by the grant given
+to the script that does the writing. Scripts that one script runs
+(rather than includes) were not measured, so no claim is made about
+them. A grant does not carry over to a different command's script or
+to the next time you start Praat.
 
 Design consequences:
 
 - Every write and every system command happens inside an explicit
   user action in the manager's own dialogs, where the prompt reads
   as confirmation of what the user just asked for.
-- The bootstrap and each manager command open with one
-  approve-for-this-session grant; everything in that sitting rides
-  on it. Target: at most one prompt per sitting, none at startup.
+- The bootstrap and each manager command prompt once per sitting
+  (one prompt per command used), and nothing prompts at startup.
+  A possible later saving: if the three commands shared one script
+  file that does the writing, a sitting that used all three would
+  prompt once instead of three times. This changes the plugin's
+  structure and is not built.
 - Reads are prompt-free, which the notification design exploits (§6).
 
 Measurement items to confirm on a real 7.0.x install before the
@@ -135,8 +153,8 @@ rather than an EML convenience.
 ## 5. End-user experience
 
 First contact: download one file, open it in Praat, click Run,
-choose Approve for this session, tick the plugins you want, restart
-once. The preferences folder stops existing as a concept the user
+choose the full-trust button if Praat's Trust window asks, tick the
+plugins you want, restart once. The preferences folder stops existing as a concept the user
 needs.
 
 Steady state: the Plugin manager submenu shows every catalog plugin
@@ -372,12 +390,14 @@ human who reviews exactly the cases the machines refuse.
 question already answered: Stats & Graphs config location (external;
 conformant).
 
-**Phase 1 — scaffold, one plugin end to end.** Shipped in v0.6.2,
+**Phase 1 — scaffold, one plugin end to end.** Shipped through v0.7.3,
 ahead of the catalog work this phase originally planned: installing
-from a zip, tar.gz, or folder already on disk, with the recursive
-search, canonical-name offers, and version-aware collision handling
-described in the README; removing an installed plugin; and the
-one-file install script. Still open: `VERSION` and manifest for
+from a zip, tar.gz, or folder already on disk, with the recursive search, canonical-name offers, and
+version-aware collision handling described in the README; removing
+an installed plugin; the installed-command report; the one-file
+install script for the manager; and Create install file, which
+writes a standalone install script into a plugin's folder.
+Still open: `VERSION` and manifest for
 Stats & Graphs; catalog repo with one live row; minimum publisher
 script (tar, checksum, row — twenty lines, manual is fine); a
 `0.9.x` test release exercising the whole pipeline; and installing
@@ -387,10 +407,11 @@ real `1.0.0` row, and the manager becomes the install path the
 validation paper can name. The manager needs nothing from the kit;
 the dependency is one pleasant direction only.
 
-**Phase 2 — the manager as a product.** Shipped in v0.6.2: the
+**Phase 2 — the manager as a product.** Shipped through v0.7.3: the
 bootstrap generator (the one-file install script, built by
-`tools/build_installer.py`) and the archive half of archive and
-restore (§7) — removing a plugin always archives it first. Still
+`tools/build_installer.py`), the archive half of archive and
+restore (§7) — removing a plugin always archives it first — and the
+per-plugin install file that Create install file writes. Still
 open: update notification (§6); the restore half of §7 (bringing an
 archived plugin back through the manager, rather than by hand); the
 full publisher tool with manifest generation and lint; and
@@ -427,7 +448,10 @@ local file.
 ## 15. Success criteria
 
 - A first-time user goes from download to installed plugin in under
-  five minutes with at most one permission prompt.
+  five minutes. Measured: with the full-trust button, Praat's Trust
+  window appears once for each command per Praat session, so the
+  first install shows it twice (once for the install file, once for
+  Install plugin from disk).
 - A plugin author goes from existing plugin to listed row in under
   an hour without changing code.
 - The steady-state maintainer burden is minutes per month.

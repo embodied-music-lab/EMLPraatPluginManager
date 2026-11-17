@@ -39,13 +39,15 @@ there first, and that copy's complete file list is checked against
 the original before the original is deleted.
 
 **Why does Praat ask me for permission?**
-Praat 7 asks before any script writes files or runs system commands,
-and the approval lasts at most until you close Praat. The manager is
-built around that: it only touches your disk when you have clicked
-an action, so every prompt arrives in direct answer to something you
-just asked for. Choose "approve for this session" and you see one
-prompt per sitting at most. Nothing runs at startup that needs
-permission.
+Praat 7 opens its Trust window before a script writes files or runs
+system commands. The manager only touches your disk when you have
+clicked an action, so every prompt arrives in direct answer to
+something you just asked for. Choose the third button, "Yes, and I
+even allow this script to CONTROL MY COMPUTER from now on". The
+manager writes and deletes many files, and Praat would otherwise ask
+again for each one. Praat asks once for each manager command, and
+again the next time you start Praat. Nothing runs at startup that
+needs permission. Praat 6.6 has no Trust window.
 
 **Does it phone home? What does it send?**
 Nothing, to nobody. The manager never touches the network. Install
@@ -220,8 +222,8 @@ skill boundary (defense: it lives in Praat, one file to start);
 empty-shelf launch (defense: convert two or three known non-EML
 tools with their authors before going public); maintainer burnout
 (defense: mechanical CI, written policies, three maintainers);
-trust-prompt fatigue on Praat 7 (defense: one session approval per
-sitting, nothing automatic); and user-data loss undermining
-confidence (defense: archive-by-default removal, automatic
+trust-prompt fatigue on Praat 7 (defense: one prompt per command per
+sitting once you choose the full-trust button, nothing automatic); and
+user-data loss undermining confidence (defense: archive-by-default removal, automatic
 rollback, preservation by inventory even for plugins that declare
 nothing).

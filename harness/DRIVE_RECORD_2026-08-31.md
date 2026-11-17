@@ -675,3 +675,32 @@ generated wrapper): PASS on every pin. Two notes for the record:
 
 Canon label uses ASCII "--" rather than the spec's em dash, per the
 repo-wide ASCII convention; spec amended to match.
+
+## v0.7.3 round 2 -- Trust-window counts and parser tokenization (17 November 2026)
+
+Praat 7.0.03 official Linux build, own HOME, Xvfb, third Trust button
+chosen every time ("Yes, and I even allow this script to CONTROL MY
+COMPUTER from now on"). Counts are Trust windows that appeared.
+
+- Manager install file: 1 window on the first run; 0 on a second run
+  in the same session.
+- Install plugin from disk, Remove plugin, Create install file: 1
+  window each on the first run in a session; 0 on a second run.
+- A generated install-<name>.praat: 1 window; 0 on a second run of
+  the same file; 1 more window for a different install file.
+- After quit and relaunch: every command asked again (grants are per
+  script file and per Praat session). A grant for one command does
+  not cover the others; included modules are covered by the script
+  that includes them.
+- A full sitting that uses all three commands therefore sees 3
+  windows, plus 1 per distinct install file.
+
+Tokenization probes (probe/*.praat): a modifier keyword followed by
+exactly one space is stripped and the command runs; two spaces or a
+tab leave a leading blank and the command fails (skipped silently
+under nocheck). The parser, the checklist count and the report count
+now share this rule and one counter.
+
+GUI drives: Remove plugin with colliding labels (foo-bar, foo_bar)
+selects only the ticked row; the 4-plugin Removal complete dialog
+renders about 755 px tall with OK visible.

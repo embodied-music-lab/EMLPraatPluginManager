@@ -218,14 +218,21 @@ runSystem_nocheck: "sh " + q$ + wrapper$ + q$
 if fileReadable (exitCodeFile$)
     exitLines$# = readLinesFromFile$# (exitCodeFile$)
     nestedExitCode = number (exitLines$# [1])
-    if nestedExitCode <> 0
+    # 127 is the shell's "command not found": no nested Praat ran at all, so
+    # it proves nothing about runSystem. Only a real nonzero Praat status
+    # (255 for a script error) counts.
+    if nestedExitCode <> 0 and nestedExitCode <> 127
         pass = pass + 1
         appendInfoLine: "PASS: a nested `runSystem` on a failing copy exits nonzero (",
             ... nestedExitCode, "), i.e. raises a script error that a supervising",
             ... " process can observe"
     else
         fail = fail + 1
-        appendInfoLine: "FAIL: nested process exited 0; runSystem did not raise"
+        if nestedExitCode = 127
+            appendInfoLine: "FAIL: no nested praat ran (exit 127, command not found) -- put a praat on PATH"
+        else
+            appendInfoLine: "FAIL: nested process exited 0; runSystem did not raise"
+        endif
     endif
 else
     fail = fail + 1
@@ -624,11 +631,10 @@ endif
 #     caps the result with NO index prefix (emlManagerApplyLabelCap with
 #     .prefix$ = ""), exactly what emlManagerBuildLabels does for an
 #     uncollided row. Sec. 2c: the ghost suffix (40 chars) always exceeds
-#     emlManager_labelSuffixCap (16), so it is always shortened via its own
-#     marker regardless of the name's length -- the annotation is present
-#     (head "lef" and tail "plugin" of the shortened suffix both survive)
-#     but the whole word "leftover" no longer does; that is expected, not a
-#     regression (Check 10 asserts the cap/marker mechanics directly).
+#     Sec. 2c (0.7.3 round 2): the ghost suffix is " leftover", 9
+#     characters, within emlManager_labelSuffixCap (16), so it is never
+#     shortened and its word always shows; the sanitizer leaves the single
+#     space as it is.
 
 check9GhostShort$ = check9Prefs$ + "/plugin_X"
 createFolder: check9GhostShort$
@@ -639,8 +645,7 @@ writeFileLine: check9GhostShort$ + "/.DS_Store", "macOS junk Praat cannot enumer
 @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
 check9GhostLabel$ = emlManagerDeriveLabel.label$
 if emlManagerRemoveComputeSuffix.isGhost = 1
-    ... and index (check9GhostLabel$, "lef") > 0
-    ... and endsWith (check9GhostLabel$, "plugin")
+    ... and check9GhostLabel$ = "plugin_X leftover"
     pass = pass + 1
     appendInfoLine: "PASS: the remove listing marks the ghost with its suffix ('",
         ... check9GhostLabel$, "')"
@@ -829,13 +834,13 @@ else
 endif
 
 # 10d/10e. suffix preservation across a short and a long name: the manager
-# suffix (36 chars, > emlManager_labelSuffixCap) always shortens via its own
-# middle-marker now (sec. 2c fixes the suffix budget at 16 regardless of
-# name length) -- but it is NEVER absent.
+# suffix (" itself", 7 chars, within emlManager_labelSuffixCap) is kept whole
+# in every case; when the prefix, name, and suffix together exceed the cap,
+# the NAME shortens (sec. 2c, 0.7.3 round 2), never the annotation.
 @emlManagerIndexPrefix: 5
 @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_X", managerSuffix$,
     ... emlManager_boolLabelCap
-expect10d$ = "n5_ plugin_X (thi___ itself)"
+expect10d$ = "n5_ plugin_X itself"
 if emlManagerApplyLabelCap.capped$ = expect10d$
     ... and startsWith (emlManagerApplyLabelCap.capped$, "n5_ plugin_X")
     pass = pass + 1
@@ -849,24 +854,24 @@ endif
 @emlManagerIndexPrefix: 6
 @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_EMLPraatPluginManager",
     ... managerSuffix$, emlManager_boolLabelCap
-expect10e$ = "n6_ plugin____nManager (thi___ itself)"
+expect10e$ = "n6_ plugin_EMLPraatP___nManager itself"
 if emlManagerApplyLabelCap.capped$ = expect10e$
     ... and length (emlManagerApplyLabelCap.capped$) = emlManager_boolLabelCap
-    ... and endsWith (emlManagerApplyLabelCap.capped$, "itself)")
+    ... and endsWith (emlManagerApplyLabelCap.capped$, managerSuffix$)
     pass = pass + 1
-    appendInfoLine: "PASS: manager-suffix label (long name, defect 2 regression:",
-        ... " suffix not dropped) -> '", expect10e$, "'"
+    appendInfoLine: "PASS: manager-suffix label (full manager folder name, forced index prefix:",
+        ... " the name shortens, the annotation stays whole) -> '", expect10e$, "'"
 else
     fail = fail + 1
     appendInfoLine: "FAIL: manager-suffix label (long name) -- expected '", expect10e$,
         ... "' got '", emlManagerApplyLabelCap.capped$, "'"
 endif
 
-# 10f/10g. the ghost suffix (40 chars), short and long name.
+# 10f/10g. the ghost suffix (" leftover", 9 chars), short and long name.
 @emlManagerIndexPrefix: 7
 @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_Ghost", ghostSuffix$,
     ... emlManager_boolLabelCap
-expect10f$ = "n7_ plugin_Ghost (lef___ plugin)"
+expect10f$ = "n7_ plugin_Ghost leftover"
 if emlManagerApplyLabelCap.capped$ = expect10f$
     ... and startsWith (emlManagerApplyLabelCap.capped$, "n7_ plugin_Ghost")
     pass = pass + 1
@@ -880,12 +885,12 @@ endif
 @emlManagerIndexPrefix: 8
 @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_ALongerGhostFolderName",
     ... ghostSuffix$, emlManager_boolLabelCap
-expect10g$ = "n8_ plugin____lderName (lef___ plugin)"
+expect10g$ = "n8_ plugin_ALonger___lderName leftover"
 if emlManagerApplyLabelCap.capped$ = expect10g$
     ... and length (emlManagerApplyLabelCap.capped$) = emlManager_boolLabelCap
-    ... and endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+    ... and endsWith (emlManagerApplyLabelCap.capped$, ghostSuffix$)
     pass = pass + 1
-    appendInfoLine: "PASS: ghost-suffix label (long name) -> '", expect10g$, "'"
+    appendInfoLine: "PASS: ghost-suffix label (29-character name shortens, annotation whole) -> '", expect10g$, "'"
 else
     fail = fail + 1
     appendInfoLine: "FAIL: ghost-suffix label (long name) -- expected '", expect10g$,
@@ -921,7 +926,7 @@ for overflowLen from 35 to 37
     @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, overflowName$, ghostSuffix$,
         ... emlManager_boolLabelCap
     if length (emlManagerApplyLabelCap.capped$) > emlManager_boolLabelCap
-        ... or not endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+        ... or not endsWith (emlManagerApplyLabelCap.capped$, ghostSuffix$)
         overflowOk = 0
         appendInfoLine: "  overflow sweep len=", overflowLen, " -> '",
             ... emlManagerApplyLabelCap.capped$, "' (", length (emlManagerApplyLabelCap.capped$), " chars)"
@@ -945,7 +950,7 @@ tooLongName$ = "plugin_" + emlHarnessRepeatChar.result$
 @emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, tooLongName$, ghostSuffix$,
     ... emlManager_boolLabelCap
 if length (emlManagerApplyLabelCap.capped$) <= emlManager_boolLabelCap
-    ... and endsWith (emlManagerApplyLabelCap.capped$, "plugin)")
+    ... and endsWith (emlManagerApplyLabelCap.capped$, ghostSuffix$)
     pass = pass + 1
     appendInfoLine: "PASS: defect-2 regression -- a name >= the cap keeps its suffix -> '",
         ... emlManagerApplyLabelCap.capped$, "'"
@@ -990,7 +995,7 @@ endif
 # must start with a letter, which is why emlManager_indexLabelLead$ puts a
 # fixed letter at the very front of every index prefix -- see
 # emlManagerIndexPrefix). Runs a capped label carrying both the index
-# prefix and the marker (row 10f's suffix) through emlManagerDeriveLabel
+# prefix and the marker (a name too long to fit, plus the ghost suffix) through emlManagerDeriveLabel
 # and confirms: derived$ starts with a letter (so indirect '.derived$'
 # readback parses at all -- the real, GUI-measured failure mode this
 # guards), the leading letter, index digit, and its underscore are all
@@ -998,8 +1003,8 @@ endif
 # outside [A-Za-z0-9_] survives into .derived$ (the readback variable
 # name).
 @emlManagerIndexPrefix: 7
-@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_Ghost", ghostSuffix$,
-    ... emlManager_boolLabelCap
+@emlManagerApplyLabelCap: emlManagerIndexPrefix.prefix$, "plugin_ALongerGhostFolderNameThatOverflows",
+    ... ghostSuffix$, emlManager_boolLabelCap
 @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
 sanitizedDerived$ = emlManagerDeriveLabel.derived$
 if startsWith (sanitizedDerived$, emlManager_indexLabelLead$ + "7_")
@@ -1112,20 +1117,305 @@ else
     endif
 endif
 
+# 10o. 0.7.3: a realistic Dialog-1 listing -- the manager's own folder, five
+# ordinary plugins, a leftover (ghost) folder, and one 44-character name --
+# built through the real emlManagerBuildLabels with the real suffix
+# constants. Every label stays within the cap and bare, the manager row shows
+# its full folder name followed by its whole annotation, and a name that fits
+# the cap is never shortened. The labels are printed for the build report.
+@emlHarnessRepeatChar: "L", 37
+check10oLong$ = "plugin_" + emlHarnessRepeatChar.result$
+check10oNames$# = { "plugin_EMLPraatPluginManager", "plugin_AERoPlot", "plugin_jjatools",
+    ... "plugin_strutils", "plugin_tgutils", "plugin_utils", "plugin_LeftoverOne", check10oLong$ }
+check10oSuffix$# = { managerSuffix$, "", "", "", "", "", ghostSuffix$, "" }
+check10oN = size (check10oNames$#)
+@emlManagerBuildLabels: check10oNames$#, check10oSuffix$#, check10oN, emlManager_boolLabelCap
+check10oOk = 1
+for check10oI to check10oN
+    check10oLabel$ = emlManagerBuildLabels.label$# [check10oI]
+    appendInfoLine: "  label ", check10oI, ": '", check10oLabel$, "' (", length (check10oLabel$), " chars)"
+    if length (check10oLabel$) > emlManager_boolLabelCap or emlManagerBuildLabels.prefixed# [check10oI] = 1
+        check10oOk = 0
+    endif
+    if length (check10oNames$# [check10oI]) <= emlManager_boolLabelCap
+        ... and not startsWith (check10oLabel$, check10oNames$# [check10oI])
+        check10oOk = 0
+    endif
+endfor
+if check10oOk = 1
+    ... and emlManagerBuildLabels.label$# [1] = "plugin_EMLPraatPluginManager itself"
+    ... and emlManagerBuildLabels.label$# [7] = "plugin_LeftoverOne leftover"
+    pass = pass + 1
+    appendInfoLine: "PASS: realistic listing -- every label within the cap, bare, names that fit kept whole"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: realistic listing -- see the labels above"
+endif
+
+# 10p. 0.7.3 round 2: the annotation words ALWAYS show. Swept over every
+# name length from 8 to 60 characters, with the ghost suffix, the manager
+# suffix, and both together, bare and with a forced index prefix: the label
+# stays within the cap and still ends with the whole annotation after the
+# sanitizer (so "leftover" and "itself" are never truncated away, including
+# for the 28-38 character names that used to lose them).
+check10pOk = 1
+check10pCases = 0
+check10pBoth$ = managerSuffix$ + ghostSuffix$
+check10pSuffix$# = { ghostSuffix$, managerSuffix$, check10pBoth$ }
+for check10pLen from 8 to 60
+    @emlHarnessRepeatChar: "A", check10pLen - 7
+    check10pName$ = "plugin_" + emlHarnessRepeatChar.result$
+    for check10pK to 3
+        for check10pPre from 0 to 1
+            check10pPrefix$ = ""
+            if check10pPre = 1
+                @emlManagerIndexPrefix: 12
+                check10pPrefix$ = emlManagerIndexPrefix.prefix$
+            endif
+            @emlManagerApplyLabelCap: check10pPrefix$, check10pName$, check10pSuffix$# [check10pK],
+                ... emlManager_boolLabelCap
+            @emlManagerDeriveLabel: emlManagerApplyLabelCap.capped$
+            check10pLabel$ = emlManagerDeriveLabel.label$
+            check10pWords$ = replace_regex$ (check10pSuffix$# [check10pK], "^ ", "", 0)
+            check10pCases = check10pCases + 1
+            if length (emlManagerApplyLabelCap.capped$) > emlManager_boolLabelCap
+                ... or not endsWith (check10pLabel$, check10pWords$)
+                check10pOk = 0
+                appendInfoLine: "  10p len=", check10pLen, " k=", check10pK, " pre=", check10pPre,
+                    ... " -> '", check10pLabel$, "'"
+            endif
+        endfor
+    endfor
+endfor
+if check10pOk = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: the annotation words survive whole in all ", check10pCases,
+        ... " name-length/suffix/prefix cases, always within the cap"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: an annotation was truncated or the cap exceeded -- see the lines above"
+endif
+
+# ============================================================================
+# 0.7.3 round 2: Check 14 -- the Removal complete dialog stays inside the
+# page budget. The dialog's line groups can be COUNTED without a pause form
+# (emit = 0), so this drives the real counting procedures and the real page
+# walk. A verifier drive measured the old dialog at 998 px for four plugins
+# (the OK button off a 900 px screen).
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 14: Removal complete dialog fits the page budget ---"
+@emlManagerPageMetrics
+
+@emlHarnessRepeatChar: "L", 37
+check14Long$ = "plugin_" + emlHarnessRepeatChar.result$
+check14Names$# = { check14Long$, "plugin_LeftoverOne", "plugin_tgutils", "plugin_utils" }
+check14Files# = { 1, 0, 41, 12 }
+check14Remained# = { 0, 1, 1, 2 }
+check14N = size (check14Names$#)
+check14Lines# = zero# (check14N)
+check14Total = 0
+for check14I to check14N
+    @emlManagerRemoveDoneBlock: check14Names$# [check14I], check14Files# [check14I], check14Remained# [check14I], 0
+    check14Lines# [check14I] = emlManagerRemoveDoneBlock.px
+    check14Total = check14Total + check14Lines# [check14I]
+endfor
+@emlManagerRemoveDoneFooter: 1, 0, 0
+check14Footer = emlManagerRemoveDoneFooter.px
+check14Keep# = zero# (check14N)
+@emlManagerPageBudgetWalk: check14Lines#, check14Keep#, check14N, emlManagerPageMetrics.budgetPx, check14Footer, 1
+if emlManagerPageBudgetWalk.nPages = 1 and check14Total + check14Footer <= emlManagerPageMetrics.budgetPx
+    pass = pass + 1
+    appendInfoLine: "PASS: four plugins fit one page -- ", check14Total, " px in blocks + ",
+        ... check14Footer, " px in the footer (budget ", emlManagerPageMetrics.budgetPx, ")"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: four plugins -- ", emlManagerPageBudgetWalk.nPages, " pages, ",
+        ... check14Total, " + ", check14Footer, " px"
+endif
+
+# Twelve plugins each leaving folders: the dialog pages, every page holds at
+# most the budget (the last page counts the footer), and every plugin lands
+# on exactly one page.
+check14M = 12
+check14BigLines# = zero# (check14M)
+for check14I to check14M
+    @emlManagerRemoveDoneBlock: "plugin_Name" + string$ (check14I), 20, 2, 0
+    check14BigLines# [check14I] = emlManagerRemoveDoneBlock.px
+endfor
+check14BigKeep# = zero# (check14M)
+@emlManagerPageBudgetWalk: check14BigLines#, check14BigKeep#, check14M, emlManagerPageMetrics.budgetPx, check14Footer, 1
+check14PagesOk = 1
+check14Covered = 0
+for check14P to emlManagerPageBudgetWalk.nPages
+    check14PageLines = 0
+    for check14I from emlManagerPageBudgetWalk.pageStartItem# [check14P] to emlManagerPageBudgetWalk.pageEndItem# [check14P]
+        check14PageLines = check14PageLines + check14BigLines# [check14I]
+        check14Covered = check14Covered + 1
+    endfor
+    if check14P = emlManagerPageBudgetWalk.nPages
+        check14PageLines = check14PageLines + check14Footer
+    endif
+    if check14PageLines > emlManagerPageMetrics.budgetPx
+        check14PagesOk = 0
+    endif
+endfor
+if emlManagerPageBudgetWalk.nPages > 1 and check14PagesOk = 1 and check14Covered = check14M
+    pass = pass + 1
+    appendInfoLine: "PASS: twelve plugins page into ", emlManagerPageBudgetWalk.nPages,
+        ... " pages, each within the budget, every plugin on one page"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: twelve plugins -- pages=", emlManagerPageBudgetWalk.nPages,
+        ... ", pagesOk=", check14PagesOk, ", covered=", check14Covered
+endif
+
+# ============================================================================
+# 0.7.3 round 3: Check 15 -- the Confirm removal dialog pages by the same
+# budget. Seven plugins used to render 1043 px on one page. Counting uses the
+# real block and footer procedures (emit = 0); the footer holds the safety
+# switch, so it is counted on the last page only.
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 15: Confirm removal dialog pages by the budget ---"
+@emlManagerPageMetrics
+
+check15N = 7
+check15Lines# = zero# (check15N)
+for check15I to check15N
+    @emlManagerRemoveGateBlock: "plugin_Name" + string$ (check15I), "", 20, 3,
+        ... "plugin_Name" + string$ (check15I) + "__1.0.0", "/x/y", 0
+    check15Lines# [check15I] = emlManagerRemoveGateBlock.px
+endfor
+@emlManagerRemoveGateFooter: 1, 0
+check15Footer = emlManagerRemoveGateFooter.px
+check15Keep# = zero# (check15N)
+@emlManagerPageBudgetWalk: check15Lines#, check15Keep#, check15N, emlManagerPageMetrics.budgetPx, check15Footer, 1
+check15PagesOk = 1
+check15Covered = 0
+for check15P to emlManagerPageBudgetWalk.nPages
+    check15PageLines = 0
+    for check15I from emlManagerPageBudgetWalk.pageStartItem# [check15P] to emlManagerPageBudgetWalk.pageEndItem# [check15P]
+        check15PageLines = check15PageLines + check15Lines# [check15I]
+        check15Covered = check15Covered + 1
+    endfor
+    if check15P = emlManagerPageBudgetWalk.nPages
+        check15PageLines = check15PageLines + check15Footer
+    endif
+    if check15PageLines > emlManagerPageMetrics.budgetPx
+        check15PagesOk = 0
+    endif
+endfor
+if emlManagerPageBudgetWalk.nPages > 1 and check15PagesOk = 1 and check15Covered = check15N
+    pass = pass + 1
+    appendInfoLine: "PASS: seven plugins page into ", emlManagerPageBudgetWalk.nPages,
+        ... " pages, each within the budget, every plugin on one page"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: seven plugins -- pages=", emlManagerPageBudgetWalk.nPages,
+        ... ", pagesOk=", check15PagesOk, ", covered=", check15Covered
+endif
+
+# A single plugin stays on one page.
+@emlManagerPageBudgetWalk: { check15Lines# [1] }, { 0 }, 1, emlManagerPageMetrics.budgetPx, check15Footer, 1
+if emlManagerPageBudgetWalk.nPages = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: one plugin keeps the dialog on one page"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: one plugin -- ", emlManagerPageBudgetWalk.nPages, " pages"
+endif
+
+# ============================================================================
+# 0.7.3 round 4: Check 16 -- the page-budget canon. A comment's height comes
+# from its last character; the budget is the screen less the chrome; and
+# every page of the real Confirm removal and Removal complete dialogs, plus
+# the chrome, fits the tallest allowed window (including 12 and 40 plugins).
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 16: page-budget canon ---"
+
+@emlManagerPageMetrics
+@emlManagerLinePx: "Ends in a period."
+check16Period = emlManagerLinePx.px
+@emlManagerLinePx: "Ends in a colon:"
+check16Colon = emlManagerLinePx.px
+@emlManagerLinePx: "Ends in a letter"
+check16Plain = emlManagerLinePx.px
+@emlManagerLinePx: ""
+check16Blank = emlManagerLinePx.px
+if check16Period = emlManagerPageMetrics.periodPx and check16Colon = emlManagerPageMetrics.colonPx
+    ... and check16Plain = emlManagerPageMetrics.commentPx and check16Blank = emlManagerPageMetrics.periodPx
+    ... and check16Period > check16Colon and check16Colon > check16Plain
+    ... and emlManagerPageMetrics.budgetPx + emlManagerPageMetrics.chromePx = emlManagerPageMetrics.screenPx
+    pass = pass + 1
+    appendInfoLine: "PASS: line heights follow the last character; budget + chrome = tallest window"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: page-budget canon -- period ", check16Period, ", colon ", check16Colon,
+        ... ", plain ", check16Plain, ", blank ", check16Blank
+endif
+
+for check16Round to 2
+    check16Count = 12
+    if check16Round = 2
+        check16Count = 40
+    endif
+    check16Px# = zero# (check16Count)
+    for check16I to check16Count
+        @emlManagerRemoveDoneBlock: "plugin_Name" + string$ (check16I), 20, 2, 0
+        check16Px# [check16I] = emlManagerRemoveDoneBlock.px
+    endfor
+    @emlManagerRemoveDoneFooter: 1, 1, 0
+    check16Footer = emlManagerRemoveDoneFooter.px
+    check16Keep# = zero# (check16Count)
+    @emlManagerPageBudgetWalk: check16Px#, check16Keep#, check16Count, emlManagerPageMetrics.budgetPx, check16Footer, 1
+    check16Ok = 1
+    for check16P to emlManagerPageBudgetWalk.nPages
+        check16Page = emlManagerPageMetrics.chromePx
+        for check16I from emlManagerPageBudgetWalk.pageStartItem# [check16P] to emlManagerPageBudgetWalk.pageEndItem# [check16P]
+            check16Page = check16Page + check16Px# [check16I]
+        endfor
+        if check16P = emlManagerPageBudgetWalk.nPages
+            check16Page = check16Page + check16Footer
+        endif
+        if check16Page > emlManagerPageMetrics.screenPx
+            check16Ok = 0
+        endif
+    endfor
+    if check16Ok = 1
+        pass = pass + 1
+        appendInfoLine: "PASS: ", check16Count, " removed plugins -- every page, with the chrome, is within ",
+            ... emlManagerPageMetrics.screenPx, " px (", emlManagerPageBudgetWalk.nPages, " pages)"
+    else
+        fail = fail + 1
+        appendInfoLine: "FAIL: ", check16Count, " removed plugins -- a page is taller than ",
+            ... emlManagerPageMetrics.screenPx, " px"
+    endif
+endfor
+
 # ============================================================================
 # UX round 2026-09-01, item 4: Check 11 -- line-budget pagination
 # (emlManagerPageBudgetWalk) on synthetic item sets.
 # ============================================================================
 
 appendInfoLine: ""
-appendInfoLine: "--- Check 11: line-budget pagination (synthetic item sets) ---"
+appendInfoLine: "--- Check 11: page-budget pagination (synthetic item sets) ---"
+
+# The walk counts in whatever unit its caller uses; these synthetic sets use
+# lines and a budget of 30 so the expected page breaks are easy to read.
+check11Budget = 30
 
 # 45 plain checkboxes (1 line each) -> pages of 30 + 15
 plain45# = zero# (45)
 for i45 from 1 to 45
     plain45# [i45] = 1
 endfor
-@emlManagerPageBudgetWalk: plain45#, 45, emlManager_pageLineBudget, 0
+plain45Keep# = zero# (45)
+@emlManagerPageBudgetWalk: plain45#, plain45Keep#, 45, check11Budget, 0, 0
 if emlManagerPageBudgetWalk.nPages = 2
     ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
     ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 30
@@ -1145,7 +1435,8 @@ annot10# = zero# (10)
 for i10 from 1 to 10
     annot10# [i10] = 4
 endfor
-@emlManagerPageBudgetWalk: annot10#, 10, emlManager_pageLineBudget, 0
+annot10Keep# = zero# (10)
+@emlManagerPageBudgetWalk: annot10#, annot10Keep#, 10, check11Budget, 0, 0
 if emlManagerPageBudgetWalk.nPages = 2
     ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
     ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 7
@@ -1165,7 +1456,8 @@ plain20# = zero# (20)
 for i20 from 1 to 20
     plain20# [i20] = 1
 endfor
-@emlManagerPageBudgetWalk: plain20#, 20, emlManager_pageLineBudget, 2
+plain20Keep# = zero# (20)
+@emlManagerPageBudgetWalk: plain20#, plain20Keep#, 20, check11Budget, 2, 0
 if emlManagerPageBudgetWalk.nPages = 1
     ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
     ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 20
@@ -1183,7 +1475,8 @@ plain29# = zero# (29)
 for i29 from 1 to 29
     plain29# [i29] = 1
 endfor
-@emlManagerPageBudgetWalk: plain29#, 29, emlManager_pageLineBudget, 2
+plain29Keep# = zero# (29)
+@emlManagerPageBudgetWalk: plain29#, plain29Keep#, 29, check11Budget, 2, 0
 if emlManagerPageBudgetWalk.nPages = 2
     ... and emlManagerPageBudgetWalk.pageStartItem# [1] = 1
     ... and emlManagerPageBudgetWalk.pageEndItem# [1] = 29
@@ -1245,6 +1538,323 @@ if check12Ok = 1
 else
     fail = fail + 1
     appendInfoLine: "FAIL: index-prefixed label readback mismatch somewhere in ", check12N, " rows"
+endif
+
+# ============================================================================
+# 0.7.3 round 2: Check 13 -- two labels that derive the SAME readback name.
+# Praat reads a checkbox back through the variable name it derives from the
+# label (spaces to underscores, first letter lowercased). "plugin_foo-bar"
+# shows as "plugin_foo bar" and "plugin_foo_bar" shows as "plugin_foo_bar";
+# the labels differ, the derived names are identical. emlManagerBuildLabels
+# must therefore test the DERIVED names. Each case below builds the listing
+# through the real canon, then plays the pause form: every row's derived
+# variable is set to 0, exactly one row's is set to 1 (the user ticks that
+# row), and emlManagerReadSelections -- the real readback -- must report
+# that row and no other. A rejected case would show a second selected row.
+# ============================================================================
+
+procedure emlHarnessTickEachRow: .names$#
+    .n = size (.names$#)
+    .suffix$# = empty$# (.n)
+    for .i to .n
+        .suffix$# [.i] = ""
+    endfor
+    @emlManagerBuildLabels: .names$#, .suffix$#, .n, emlManager_boolLabelCap
+    .derived$# = emlManagerBuildLabels.derived$#
+    .prefixedCount = 0
+    .ok = 1
+    for .i to .n
+        .prefixedCount = .prefixedCount + emlManagerBuildLabels.prefixed# [.i]
+    endfor
+    for .tick to .n
+        for .i to .n
+            .vn$ = .derived$# [.i]
+            '.vn$' = 0
+        endfor
+        .vn$ = .derived$# [.tick]
+        '.vn$' = 1
+        @emlManagerReadSelections: .derived$#, .n
+        for .i to .n
+            .want = 0
+            if .i = .tick
+                .want = 1
+            endif
+            if emlManagerReadSelections.selected# [.i] <> .want
+                .ok = 0
+            endif
+        endfor
+    endfor
+endproc
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 13: rows that derive the same readback name are told apart ---"
+
+check13A$# = { "plugin_foo-bar", "plugin_foo_bar" }
+@emlHarnessTickEachRow: check13A$#
+check13AOk = emlHarnessTickEachRow.ok
+check13APrefixed = emlHarnessTickEachRow.prefixedCount
+
+check13B$# = { "Plugin_Upper", "plugin_Upper" }
+@emlHarnessTickEachRow: check13B$#
+check13BOk = emlHarnessTickEachRow.ok
+check13BPrefixed = emlHarnessTickEachRow.prefixedCount
+
+check13C$# = { "plugin_a b", "plugin_a-b", "plugin_other", "plugin_a_b", "plugin_a.b" }
+@emlHarnessTickEachRow: check13C$#
+check13COk = emlHarnessTickEachRow.ok
+check13CPrefixed = emlHarnessTickEachRow.prefixedCount
+
+# Distinct names stay bare (no prefix is added without a real collision).
+check13D$# = { "plugin_foo", "plugin_bar", "plugin_foo2" }
+@emlHarnessTickEachRow: check13D$#
+check13DOk = emlHarnessTickEachRow.ok
+check13DPrefixed = emlHarnessTickEachRow.prefixedCount
+
+if check13AOk = 1 and check13APrefixed = 2
+    pass = pass + 1
+    appendInfoLine: "PASS: plugin_foo-bar and plugin_foo_bar -- both get the index prefix, and ticking",
+        ... " either one reads back as only that row"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: plugin_foo-bar / plugin_foo_bar -- readback ok=", check13AOk,
+        ... ", prefixed rows=", check13APrefixed
+endif
+if check13BOk = 1 and check13BPrefixed = 2
+    pass = pass + 1
+    appendInfoLine: "PASS: Plugin_Upper and plugin_Upper (same name once the first letter is",
+        ... " lowercased) -- told apart"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: Plugin_Upper / plugin_Upper -- readback ok=", check13BOk,
+        ... ", prefixed rows=", check13BPrefixed
+endif
+if check13COk = 1 and check13CPrefixed = 4
+    pass = pass + 1
+    appendInfoLine: "PASS: four punctuation variants of plugin_a_b are told apart, and the",
+        ... " bystander plugin_other stays bare"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: plugin_a_b variants -- readback ok=", check13COk,
+        ... ", prefixed rows=", check13CPrefixed
+endif
+if check13DOk = 1 and check13DPrefixed = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: distinct names get no prefix"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: distinct names -- readback ok=", check13DOk, ", prefixed rows=", check13DPrefixed
+endif
+
+# ============================================================================
+# 0.7.3 round 5: Check 17 -- the keep-together rules of the page walk. An
+# item marked keep-with-previous never starts a page; a footer reserve that
+# keeps with the last block never makes a footer-only page (the Confirm
+# removal safety switch is never alone); a block taller than the budget
+# still gets a page.
+# ============================================================================
+
+appendInfoLine: ""
+appendInfoLine: "--- Check 17: keep-together rules of the page walk ---"
+@emlManagerPageMetrics
+
+# Blocks of three one-unit items (marks 0, 1, 1), budget 31: pages end on a
+# block boundary however the budget falls (10 blocks fill 30 units; the 31st
+# unit would start an eleventh block that does not fit).
+check17Px# = zero# (36)
+check17Keep# = zero# (36)
+for check17I to 36
+    check17Px# [check17I] = 1
+    if check17I mod 3 <> 1
+        check17Keep# [check17I] = 1
+    endif
+endfor
+@emlManagerPageBudgetWalk: check17Px#, check17Keep#, 36, 31, 0, 0
+check17Ok = emlManagerPageBudgetWalk.nPages = 2
+for check17P to emlManagerPageBudgetWalk.nPages
+    if check17Keep# [emlManagerPageBudgetWalk.pageStartItem# [check17P]] = 1
+        check17Ok = 0
+    endif
+endfor
+if check17Ok = 1 and emlManagerPageBudgetWalk.pageEndItem# [1] = 30
+    pass = pass + 1
+    appendInfoLine: "PASS: blocks of three stay whole -- page 1 ends at item 30, no page starts on a continuation"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: blocks of three -- pages ", emlManagerPageBudgetWalk.nPages,
+        ... ", page 1 ends at ", emlManagerPageBudgetWalk.pageEndItem# [1]
+endif
+
+# A block taller than the budget still gets a page, and the walk ends.
+@emlManagerPageBudgetWalk: { 40, 5, 5 }, { 0, 0, 1 }, 3, 31, 0, 0
+if emlManagerPageBudgetWalk.nPages = 2 and emlManagerPageBudgetWalk.pageEndItem# [1] = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: a block taller than the budget takes a page alone"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: oversize block -- pages ", emlManagerPageBudgetWalk.nPages
+endif
+
+# A footer that keeps with the last block: 29 one-unit items, a 2-unit
+# footer, budget 30. Page 1 takes 28 items; page 2 takes item 29 with the
+# footer. Without the keep, the footer would sit alone on page 3.
+check17Px# = zero# (29)
+check17Keep# = zero# (29)
+for check17I to 29
+    check17Px# [check17I] = 1
+endfor
+@emlManagerPageBudgetWalk: check17Px#, check17Keep#, 29, 30, 2, 1
+if emlManagerPageBudgetWalk.nPages = 2 and emlManagerPageBudgetWalk.pageStartItem# [2] = 29
+    ... and emlManagerPageBudgetWalk.pageEndItem# [2] = 29
+    pass = pass + 1
+    appendInfoLine: "PASS: a footer kept with the last block moves that block to the footer's page"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: kept footer -- pages ", emlManagerPageBudgetWalk.nPages,
+        ... ", page 2 holds ", emlManagerPageBudgetWalk.pageStartItem# [2], " to ", emlManagerPageBudgetWalk.pageEndItem# [2]
+endif
+
+# The real Confirm removal blocks and footer, 1 to 40 plugins: the last page
+# always holds at least one plugin block with the footer, and every page
+# (the last with the footer) is within the budget.
+check17Bad = 0
+check17Worst = 0
+for check17N from 1 to 40
+    check17Px# = zero# (check17N)
+    check17Keep# = zero# (check17N)
+    for check17I to check17N
+        @emlManagerRemoveGateBlock: "plugin_Name" + string$ (check17I), "", 20, 3,
+            ... "plugin_Name" + string$ (check17I) + "__1.0.0", "/x/y", 0
+        check17Px# [check17I] = emlManagerRemoveGateBlock.px
+    endfor
+    @emlManagerRemoveGateFooter: 1, 0
+    check17Footer = emlManagerRemoveGateFooter.px
+    @emlManagerPageBudgetWalk: check17Px#, check17Keep#, check17N, emlManagerPageMetrics.budgetPx, check17Footer, 1
+    check17Last = emlManagerPageBudgetWalk.nPages
+    if emlManagerPageBudgetWalk.pageStartItem# [check17Last] > emlManagerPageBudgetWalk.pageEndItem# [check17Last]
+        check17Bad = check17Bad + 1
+    endif
+    for check17P to check17Last
+        check17Sum = 0
+        for check17I from emlManagerPageBudgetWalk.pageStartItem# [check17P] to emlManagerPageBudgetWalk.pageEndItem# [check17P]
+            check17Sum = check17Sum + check17Px# [check17I]
+        endfor
+        if check17P = check17Last
+            check17Sum = check17Sum + check17Footer
+        endif
+        if check17Sum > emlManagerPageMetrics.budgetPx
+            check17Bad = check17Bad + 1
+        endif
+    endfor
+endfor
+if check17Bad = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: 1 to 40 plugins -- the safety switch always shares a page with a plugin block, every page within the budget"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: confirm pages -- ", check17Bad, " bad page(s) across 1 to 40 plugins"
+endif
+
+# The same real blocks and footer WITHOUT the keep, as the proof the keep
+# does something: some count from 1 to 40 leaves the footer alone.
+check17Alone = 0
+for check17N from 1 to 40
+    check17Px# = zero# (check17N)
+    check17Keep# = zero# (check17N)
+    for check17I to check17N
+        @emlManagerRemoveGateBlock: "plugin_Name" + string$ (check17I), "", 20, 3,
+            ... "plugin_Name" + string$ (check17I) + "__1.0.0", "/x/y", 0
+        check17Px# [check17I] = emlManagerRemoveGateBlock.px
+    endfor
+    @emlManagerRemoveGateFooter: 1, 0
+    @emlManagerPageBudgetWalk: check17Px#, check17Keep#, check17N, emlManagerPageMetrics.budgetPx, emlManagerRemoveGateFooter.px, 0
+    check17Last = emlManagerPageBudgetWalk.nPages
+    if emlManagerPageBudgetWalk.pageStartItem# [check17Last] > emlManagerPageBudgetWalk.pageEndItem# [check17Last]
+        check17Alone = check17Alone + 1
+    endif
+endfor
+if check17Alone > 0
+    pass = pass + 1
+    appendInfoLine: "PASS: without the keep, ", check17Alone, " of 40 counts leave the footer alone, so the check above is not vacuous"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: no footer-only page without the keep; the check above proves nothing"
+endif
+
+# The cancel message is one per command.
+if emlManagerRemove_msgCancelled$ = "Removal cancelled."
+    pass = pass + 1
+    appendInfoLine: "PASS: Remove plugin cancels with its own message"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: Remove plugin cancel message is '", emlManagerRemove_msgCancelled$, "'"
+endif
+
+# 0.7.3 round 6: Check 18 -- the install checklist's literal-names switch is
+# never alone on a page. The real checklist walk (emlManagerChecklistPages,
+# the procedure the install dialog calls) over 1 to 80 plugin rows, once with
+# one-line descriptions and once with descriptions that wrap to several
+# lines: the last page always lists at least one plugin, and every page
+# (the last with the switch and its spacer) is within the budget.
+appendInfoLine: ""
+appendInfoLine: "--- Check 18: install checklist switch never alone on a page ---"
+@emlManagerPageMetrics
+check18Bad = 0
+check18Alone = 0
+for check18Kind to 2
+    for check18N from 1 to 80
+        check18Desc$# = empty$# (check18N)
+        for check18I to check18N
+            check18Desc$# [check18I] = "plugin_Name" + string$ (check18I) + "__1.0.0 -- new, adds 5 commands"
+            if check18Kind = 2
+                check18Desc$# [check18I] = check18Desc$# [check18I]
+                    ... + " (replaces plugin_Name" + string$ (check18I) + "__0.9.0 in your preferences folder, which is archived first and can be restored from the archive folder)"
+            endif
+        endfor
+        @emlManagerChecklistPages: check18Desc$#, check18N
+        check18Last = emlManagerChecklistPages.nPages
+        if emlManagerChecklistPages.pageStartItem# [check18Last] > emlManagerChecklistPages.pageEndItem# [check18Last]
+            check18Bad = check18Bad + 1
+        endif
+        for check18P to check18Last
+            check18Sum = 0
+            for check18I from emlManagerChecklistPages.pageStartItem# [check18P] to emlManagerChecklistPages.pageEndItem# [check18P]
+                @emlManagerWrappedPx: check18Desc$# [check18I], 0
+                check18Sum = check18Sum + emlManagerWrappedPx.px + emlManagerPageMetrics.booleanPx
+            endfor
+            if check18P = check18Last
+                check18Sum = check18Sum + emlManagerPageMetrics.reservePx
+            endif
+            if check18Sum > emlManagerPageMetrics.budgetPx
+                check18Bad = check18Bad + 1
+            endif
+        endfor
+        # The same rows with the switch allowed a page of its own.
+        check18Px# = zero# (check18N)
+        for check18I to check18N
+            @emlManagerWrappedPx: check18Desc$# [check18I], 0
+            check18Px# [check18I] = emlManagerWrappedPx.px + emlManagerPageMetrics.booleanPx
+        endfor
+        check18NoKeep# = zero# (check18N)
+        @emlManagerPageBudgetWalk: check18Px#, check18NoKeep#, check18N, emlManagerPageMetrics.budgetPx, emlManagerPageMetrics.reservePx, 0
+        check18Last = emlManagerPageBudgetWalk.nPages
+        if emlManagerPageBudgetWalk.pageStartItem# [check18Last] > emlManagerPageBudgetWalk.pageEndItem# [check18Last]
+            check18Alone = check18Alone + 1
+        endif
+    endfor
+endfor
+if check18Bad = 0
+    pass = pass + 1
+    appendInfoLine: "PASS: 160 checklist sizes -- the switch always shares a page with a plugin, every page within the budget"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: checklist pages -- ", check18Bad, " bad page(s)"
+endif
+if check18Alone > 0
+    pass = pass + 1
+    appendInfoLine: "PASS: without the keep, ", check18Alone, " of 160 sizes leave the switch alone, so the check above is not vacuous"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: no switch-only page without the keep; the check above proves nothing"
 endif
 
 # ============================================================================

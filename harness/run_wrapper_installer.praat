@@ -336,6 +336,34 @@ else
         ... " version=", bakedVersionOk
 endif
 
+# The report's keep-with-previous marks are baked beside the lines: one mark
+# per line (a one-line entry is 0), so the wrapper's page walk keeps each
+# entry whole.
+bakedKeepOk = 0
+for li to size (wrapperLines$#)
+    if wrapperLines$# [li] = "wrapReportKeep# = { 0, 0 }"
+        bakedKeepOk = 1
+    endif
+endfor
+if bakedKeepOk = 1
+    pass = pass + 1
+    appendInfoLine: "PASS: the wrapper bakes one keep mark per report line"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: baked keep marks missing or wrong"
+endif
+
+# One cancel message per command: Create install file says so, not
+# "Installation cancelled.".
+if emlManagerCif_msgCancelled$ = "Install file creation cancelled."
+    ... and emlManagerCif_msgCancelled$ <> emlManager_msgCancelled$
+    pass = pass + 1
+    appendInfoLine: "PASS: Create install file cancels with its own message"
+else
+    fail = fail + 1
+    appendInfoLine: "FAIL: Create install file cancel message is '", emlManagerCif_msgCancelled$, "'"
+endif
+
 if emlManagerCifGenerateWrapper.manifestCount = size (expectManifest$#)
     ... and emlManagerCifGenerateWrapper.reportCount = 2
     pass = pass + 1

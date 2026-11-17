@@ -29,3 +29,43 @@ Add action command: "Sound", 3, "", 0, "", 0, "Triple Select", "", 0, "triple.pr
 Add action command: "Intensity", 1, "", 0, "", 0, "View Intensity", "", 0, "view_intensity.praat"	action	Adds a "View Intensity" button that appears when you select an Intensity.	AMENDED: an-article before a vowel-initial class
 Add menu commands: "Objects", "Praat", "Not A Registration", "", 0, "notreg.praat"	ignored		AMENDED: delimiter false positive -- "commands:" is not "command:" or "command..."
 Add menu command: windowVar$, "Praat", "Fixed Title", "", 0, "winvar.praat"	computed		AMENDED rule 4: non-literal window argument -- computed even though the title is literal
+nocheck Add menu command: "Objects", "New", "Mod nocheck", "", 0, "m.praat"	menu	Adds "Mod nocheck" to the New menu in the Objects window.	modifier nocheck, modern menu
+nocheck Add menu command... "Objects" "New" "Leg nocheck" "" 0 m.praat	menu	Adds "Leg nocheck" to the New menu in the Objects window.	modifier nocheck, legacy menu
+nowarn Add menu command: "Objects", "New", "Mod nowarn", "", 0, "m.praat"	menu	Adds "Mod nowarn" to the New menu in the Objects window.	modifier nowarn, modern menu
+nowarn Add menu command... "Objects" "New" "Leg nowarn" "" 0 m.praat	menu	Adds "Leg nowarn" to the New menu in the Objects window.	modifier nowarn, legacy menu
+noprogress Add menu command: "Objects", "New", "Mod noprogress", "", 0, "m.praat"	menu	Adds "Mod noprogress" to the New menu in the Objects window.	modifier noprogress, modern menu
+noprogress Add menu command... "Objects" "New" "Leg noprogress" "" 0 m.praat	menu	Adds "Leg noprogress" to the New menu in the Objects window.	modifier noprogress, legacy menu
+demo Add menu command: "Objects", "New", "Mod demo", "", 0, "m.praat"	menu	Adds "Mod demo" to the New menu in the Objects window.	modifier demo, modern menu
+demo Add menu command... "Objects" "New" "Leg demo" "" 0 m.praat	menu	Adds "Leg demo" to the New menu in the Objects window.	modifier demo, legacy menu
+asynchronous Add menu command: "Objects", "New", "Mod asynchronous", "", 0, "m.praat"	menu	Adds "Mod asynchronous" to the New menu in the Objects window.	modifier asynchronous, modern menu
+asynchronous Add menu command... "Objects" "New" "Leg asynchronous" "" 0 m.praat	menu	Adds "Leg asynchronous" to the New menu in the Objects window.	modifier asynchronous, legacy menu
+nocheck Add action command: "Sound", 0, "", 0, "", 0, "Act nocheck", "", 0, "a.praat"	action	Adds a "Act nocheck" button that appears when you select a Sound.	modifier nocheck, modern action
+nocheck Add action command... Sound 1 "" 0 "" 0 "Lact nocheck" "" 0 a.praat	action	Adds a "Lact nocheck" button that appears when you select a Sound.	modifier nocheck, legacy action
+nowarn Add action command: "Sound", 0, "", 0, "", 0, "Act nowarn", "", 0, "a.praat"	action	Adds a "Act nowarn" button that appears when you select a Sound.	modifier nowarn, modern action
+nowarn Add action command... Sound 1 "" 0 "" 0 "Lact nowarn" "" 0 a.praat	action	Adds a "Lact nowarn" button that appears when you select a Sound.	modifier nowarn, legacy action
+noprogress Add action command: "Sound", 0, "", 0, "", 0, "Act noprogress", "", 0, "a.praat"	action	Adds a "Act noprogress" button that appears when you select a Sound.	modifier noprogress, modern action
+noprogress Add action command... Sound 1 "" 0 "" 0 "Lact noprogress" "" 0 a.praat	action	Adds a "Lact noprogress" button that appears when you select a Sound.	modifier noprogress, legacy action
+nocheck nowarn Add menu command: "Objects", "New", "Stacked Two", "", 0, "s.praat"	menu	Adds "Stacked Two" to the New menu in the Objects window.	two modifiers stacked
+noprogress nocheck nowarn Add menu command... "Objects" "New" "Stacked Three" "" 0 s.praat	menu	Adds "Stacked Three" to the New menu in the Objects window.	three modifiers stacked, one space after each, legacy
+  nowarn Add menu command: "Objects", "New", "Indented Modifier", "", 0, "i.praat"	menu	Adds "Indented Modifier" to the New menu in the Objects window.	blanks before the whole line are ignored, as in Praat
+nocheck  Add menu command: "Objects", "New", "Two Spaces", "", 0, "t.praat"	ignored		two spaces after a modifier: Praat 7.0.03 refuses the command text, so nothing registers
+nocheck nowarn  Add menu command: "Objects", "New", "Two Spaces Stacked", "", 0, "t.praat"	ignored		two spaces after the last of stacked modifiers: nothing registers
+nocheck Add menu command: "Objects", "Praat", dynamicTitle$, "", 0, "d.praat"	computed		modifier with computed title
+nocheck Add menu commands: this is prose	ignored		modifier does not rescue a non-registration
+nocheckAdd menu command: "Objects", "New", "Glued", "", 0, "g.praat"	ignored		modifier needs a blank after it
+# nocheck Add menu command: "Objects", "New", "Commented", "", 0, "c.praat"	ignored		modifier line inside a comment is ignored
+nocheck Add menu command... "Objects" "New" "Five Arg Legacy" "" 0	submenu	Adds a submenu "Five Arg Legacy" to the New menu in the Objects window.	legacy menu line without the script argument: Praat shows a submenu title, which is reported but is not a command (Praat 7.0.03 accepts it)
+Add action command... Sound 1 "" 0 "" 0 "Nine Arg Legacy" "" 0	ignored		legacy action line without the script argument: Praat shows a heading label that cannot be clicked, so it is not a button
+Add menu command: "Objects", "New", "Five Arg Modern", "", 0	ignored		modern menu line without the script argument is an error in Praat, so it is not a registration
+Add menu command: "Objects", "New", "--", "", 0, ""	ignored		separator, modern syntax: not a command
+Add menu command... "Objects" "New" "-- peaks --" "" 1	ignored		separator, legacy syntax: not a command
+nocheck Add menu command: "Objects", "Praat", "-", "", 0, ""	ignored		separator behind a modifier: not a command
+Add action command: "Sound", 0, "", 0, "", 0, "-- band filter --", "Autocorrelation", 1, ""	ignored		separator, modern action syntax: not a command
+Add action command... Sound 0 "" 0 "" 0 "--" "Convolve" 1	ignored		separator, legacy action syntax: not a command
+Add action command: "Sound", 1, "", 0, "", 0, "Filters -", "Convolve", 0, "filters.praat"	action	Adds a "Filters -" button that appears when you select a Sound.	a hyphen at the END of a title is not a separator
+Add menu command: "Objects", "Praat", "Scriptless Head", "", 0, ""	submenu	Adds a submenu "Scriptless Head" to the Praat menu in the Objects window.	modern menu line with an empty script: a submenu title
+Add menu command: "Objects", "Praat", "Head Child", "Scriptless Head", 1, "child.praat"	menu	Adds "Head Child" to the Praat menu in the Objects window, under "Scriptless Head".	the submenu title above still serves as the parent for the under-clause
+Add menu command: "Objects", "Praat", "Inner Head", "Scriptless Head", 1, ""	submenu	Adds a submenu "Inner Head" to the Praat menu in the Objects window, under "Scriptless Head".	nested submenu title, under-clause
+Add menu command: "Objects", "Praat", dynamicHead$, "", 0, ""	ignored		scriptless menu line with a computed name: not a command, and its name is unknown, so it is left out
+Add action command: "Table", 1, "", 0, "", 0, "Heading Label", "", 0, ""	ignored		action line with an empty script: a heading label, not a button
+Add action command: "Table", 1, "", 0, "", 0, computedHeading$, "", 0, ""	ignored		scriptless action line with a computed name: left out, not tallied as computed
